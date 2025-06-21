@@ -1,0 +1,81 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .class-box { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
+      .central-class { fill: #fff3e0; stroke: #f57c00; stroke-width: 3; }
+      .class-title { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; fill: #333; }
+      .class-type { font-family: Arial, sans-serif; font-size: 11px; fill: #666; font-style: italic; }
+      .arrow { fill: none; stroke: #555; stroke-width: 2; }
+      .arrow-marker { fill: #555; }
+      .relation-text { font-family: Arial, sans-serif; font-size: 12px; fill: #333; }
+    </style>
+    
+    <!-- Arrow marker -->
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" class="arrow-marker" />
+    </marker>
+  </defs>
+  
+  <!-- HydraulicCylinderOntology (中心) -->
+  <rect x="300" y="250" width="200" height="80" class="central-class" rx="5" ry="5" />
+  <text x="400" y="275" text-anchor="middle" class="class-title">HydraulicCylinderOntology</text>
+  <text x="400" y="295" text-anchor="middle" class="class-type">&lt;&lt;Ontology Class&gt;&gt;</text>
+  <text x="400" y="315" text-anchor="middle" style="font-size: 11px; fill: #666;">整合協調中心</text>
+  
+  <!-- BomGeneratorService (左上) -->
+  <rect x="50" y="80" width="180" height="80" class="class-box" rx="5" ry="5" />
+  <text x="140" y="105" text-anchor="middle" class="class-title">BomGeneratorService</text>
+  <text x="140" y="125" text-anchor="middle" class="class-type">&lt;&lt;Service&gt;&gt;</text>
+  <text x="140" y="145" text-anchor="middle" style="font-size: 11px; fill: #666;">生成新的BOM</text>
+  
+  <!-- EnhancedHydraulicCylinderRules (右上) -->
+  <rect x="570" y="80" width="220" height="80" class="class-box" rx="5" ry="5" />
+  <text x="680" y="105" text-anchor="middle" class="class-title">EnhancedHydraulicCylinderRules</text>
+  <text x="680" y="125" text-anchor="middle" class="class-type">&lt;&lt;Rules Engine&gt;&gt;</text>
+  <text x="680" y="145" text-anchor="middle" style="font-size: 11px; fill: #666;">進階推理規則</text>
+  
+  <!-- ReasoningService (下方) -->
+  <rect x="290" y="420" width="220" height="80" class="class-box" rx="5" ry="5" />
+  <text x="400" y="445" text-anchor="middle" class="class-title">ReasoningService</text>
+  <text x="400" y="465" text-anchor="middle" class="class-type">&lt;&lt;Service&gt;&gt;</text>
+  <text x="400" y="485" text-anchor="middle" style="font-size: 11px; fill: #666;">本體論推理</text>
+  
+  <!-- 關係箭頭 -->
+  <!-- HydraulicCylinderOntology -> BomGeneratorService -->
+  <path d="M 300 270 Q 200 210 140 160" class="arrow" marker-end="url(#arrowhead)" />
+  <text x="180" y="200" text-anchor="middle" class="relation-text">works with</text>
+  <text x="180" y="215" text-anchor="middle" style="font-size: 10px; fill: #666;">協同工作</text>
+  
+  <!-- HydraulicCylinderOntology -> EnhancedHydraulicCylinderRules -->
+  <path d="M 500 270 Q 600 210 680 160" class="arrow" marker-end="url(#arrowhead)" />
+  <text x="620" y="200" text-anchor="middle" class="relation-text">complements</text>
+  <text x="620" y="215" text-anchor="middle" style="font-size: 10px; fill: #666;">互補增強</text>
+  
+  <!-- HydraulicCylinderOntology -> ReasoningService -->
+  <path d="M 400 330 L 400 420" class="arrow" marker-end="url(#arrowhead)" />
+  <text x="450" y="375" text-anchor="middle" class="relation-text">supports</text>
+  <text x="450" y="390" text-anchor="middle" style="font-size: 10px; fill: #666;">支援推理</text>
+  
+  <!-- 雙向箭頭表示整合 -->
+  <path d="M 230 120 L 300 270" class="arrow" stroke-dasharray="5,5" />
+  <path d="M 570 120 L 500 270" class="arrow" stroke-dasharray="5,5" />
+  <path d="M 400 330 L 400 420" class="arrow" stroke-dasharray="5,5" />
+  
+  <!-- 說明文字 -->
+  <text x="400" y="30" text-anchor="middle" style="font-size: 16px; font-weight: bold; fill: #333;">液壓缸系統類別關係圖</text>
+  
+  <!-- 圖例 -->
+  <rect x="30" y="530" width="120" height="50" fill="white" stroke="#ccc" stroke-width="1" rx="3" ry="3" />
+  <text x="40" y="550" style="font-size: 12px; fill: #333;">圖例：</text>
+  <line x1="40" y1="560" x2="70" y2="560" class="arrow" marker-end="url(#arrowhead)" />
+  <text x="75" y="565" style="font-size: 11px; fill: #666;">關係流向</text>
+  
+  <!-- 整合說明 -->
+  <rect x="550" y="450" width="230" height="120" fill="#f5f5f5" stroke="#999" stroke-width="1" rx="5" ry="5" />
+  <text x="665" y="470" text-anchor="middle" style="font-size: 12px; font-weight: bold; fill: #333;">整合特點</text>
+  <text x="560" y="490" style="font-size: 11px; fill: #555;">• Ontology 作為中心協調者</text>
+  <text x="560" y="510" style="font-size: 11px; fill: #555;">• 支援 BOM 自動生成</text>
+  <text x="560" y="530" style="font-size: 11px; fill: #555;">• 整合規則引擎進行推理</text>
+  <text x="560" y="550" style="font-size: 11px; fill: #555;">• 提供本體論推理能力</text>
+</svg>

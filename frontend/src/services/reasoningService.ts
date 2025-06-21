@@ -17,7 +17,7 @@ const BASE_URL = '/reasoning';
 // Use the axios instance with basic interceptors
 const reasoningApi = createAxiosWithInterceptors(API_BASE_URL);
 // Configure timeout separately
-reasoningApi.defaults.timeout = 45000; // 45 seconds for potentially long reasoning operations
+reasoningApi.defaults.timeout = 120000; // 45 seconds for potentially long reasoning operations
 
 // Add request interceptor for debugging
 reasoningApi.interceptors.request.use(request => {

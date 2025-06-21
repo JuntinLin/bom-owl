@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 760">
+  <!-- Background -->
+  <rect width="900" height="760" fill="#f8fafc" />
+  
+  <!-- Title -->
+  <text x="450" y="40" font-family="Arial" font-size="24" font-weight="bold" text-anchor="middle">GNN 基於 OWL 的 BOM 推理系統架構</text>
+  
+  <!-- Spring Boot Application Container -->
+  <rect x="50" y="80" width="800" height="600" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="2" />
+  <text x="450" y="110" font-family="Arial" font-size="20" font-weight="bold" text-anchor="middle">Spring Boot Application</text>
+  
+  <!-- Web Layer -->
+  <rect x="100" y="140" width="700" height="90" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" />
+  <text x="450" y="165" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">Web 層</text>
+  
+  <!-- Web Layer Components -->
+  <rect x="120" y="180" width="150" height="35" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="195" y="203" font-family="Arial" font-size="14" text-anchor="middle">BOM REST API</text>
+  
+  <rect x="290" y="180" width="150" height="35" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="365" y="203" font-family="Arial" font-size="14" text-anchor="middle">Ontology API</text>
+  
+  <rect x="460" y="180" width="150" height="35" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="535" y="203" font-family="Arial" font-size="14" text-anchor="middle">GNN Inference API</text>
+  
+  <rect x="630" y="180" width="150" height="35" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="705" y="203" font-family="Arial" font-size="14" text-anchor="middle">WebSocket</text>
+  
+  <!-- Service Layer -->
+  <rect x="100" y="250" width="700" height="100" rx="10" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2" />
+  <text x="450" y="275" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">Service 層</text>
+  
+  <!-- Service Layer Components -->
+  <rect x="120" y="295" width="135" height="40" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="187" y="320" font-family="Arial" font-size="14" text-anchor="middle">BomService</text>
+  
+  <rect x="275" y="295" width="135" height="40" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="342" y="320" font-family="Arial" font-size="14" text-anchor="middle">OntologyService</text>
+  
+  <rect x="430" y="295" width="135" height="40" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="497" y="320" font-family="Arial" font-size="14" text-anchor="middle">GnnService</text>
+  
+  <rect x="585" y="295" width="195" height="40" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="682" y="320" font-family="Arial" font-size="14" text-anchor="middle">BomGenerationService</text>
+  
+  <!-- OWL & Knowledge Graph Layer -->
+  <rect x="100" y="370" width="700" height="100" rx="10" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2" />
+  <text x="450" y="395" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">OWL &amp; 知識圖譜層</text>
+  
+  <!-- OWL Components -->
+  <rect x="120" y="415" width="200" height="40" rx="5" fill="#ddd6fe" stroke="#8b5cf6" stroke-width="1" />
+  <text x="220" y="440" font-family="Arial" font-size="14" text-anchor="middle">OWL API</text>
+  
+  <rect x="340" y="415" width="200" height="40" rx="5" fill="#ddd6fe" stroke="#8b5cf6" stroke-width="1" />
+  <text x="440" y="440" font-family="Arial" font-size="14" text-anchor="middle">知識圖譜轉換模組</text>
+  
+  <rect x="560" y="415" width="220" height="40" rx="5" fill="#ddd6fe" stroke="#8b5cf6" stroke-width="1" />
+  <text x="670" y="440" font-family="Arial" font-size="14" text-anchor="middle">OWL/RDF 三元資料管理</text>
+  
+  <!-- GNN Core Layer -->
+  <rect x="100" y="490" width="700" height="170" rx="10" fill="#d8b4fe" stroke="#9333ea" stroke-width="2" />
+  <text x="450" y="515" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">GNN 核心層</text>
+  
+  <!-- GNN Components -->
+  <rect x="120" y="535" width="200" height="110" rx="5" fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1" />
+  <text x="220" y="555" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">圖神經網路模型</text>
+  <text x="220" y="580" font-family="Arial" font-size="12" text-anchor="middle">- Graph Convolutional Network</text>
+  <text x="220" y="600" font-family="Arial" font-size="12" text-anchor="middle">- Graph Attention Network</text>
+  <text x="220" y="620" font-family="Arial" font-size="12" text-anchor="middle">- Knowledge Graph Embedding</text>
+  
+  <rect x="340" y="535" width="220" height="110" rx="5" fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1" />
+  <text x="450" y="555" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">深度學習框架整合</text>
+  <text x="450" y="580" font-family="Arial" font-size="12" text-anchor="middle">- DL4J (Deep Learning for Java)</text>
+  <text x="450" y="600" font-family="Arial" font-size="12" text-anchor="middle">- TensorFlow Java API</text>
+  <text x="450" y="620" font-family="Arial" font-size="12" text-anchor="middle">- PyTorch JNI Bridge</text>
+  
+  <rect x="580" y="535" width="200" height="110" rx="5" fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1" />
+  <text x="680" y="555" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">BOM 推理引擎</text>
+  <text x="680" y="580" font-family="Arial" font-size="12" text-anchor="middle">- 相似性檢測</text>
+  <text x="680" y="600" font-family="Arial" font-size="12" text-anchor="middle">- 組件預測</text>
+  <text x="680" y="620" font-family="Arial" font-size="12" text-anchor="middle">- 關係推理</text>
+  
+  <!-- Data Access Layer -->
+  <rect x="100" y="630" width="700" height="30" rx="5" fill="#a7f3d0" stroke="#10b981" stroke-width="2" />
+  <text x="450" y="650" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">Data Access Layer (JPA/JDBC)</text>
+  
+  <!-- External Components -->
+  <rect x="100" y="700" width="170" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="185" y="725" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">TiptopERP DB</text>
+  
+  <rect x="290" y="700" width="170" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="375" y="725" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">Protégé OWL 檔案</text>
+  
+  <rect x="480" y="700" width="170" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="565" y="725" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">GNN 訓練資料</text>
+  
+  <rect x="670" y="700" width="130" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="735" y="725" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">模型儲存庫</text>
+  
+  <!-- Connection Lines -->
+  <!-- Web to Service -->
+  <line x1="450" y1="230" x2="450" y2="250" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- Service to OWL -->
+  <line x1="450" y1="350" x2="450" y2="370" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- OWL to GNN -->
+  <line x1="450" y1="470" x2="450" y2="490" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- GNN to Data Access -->
+  <line x1="450" y1="600" x2="450" y2="630" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- Data Access to External -->
+  <line x1="185" y1="660" x2="185" y2="700" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  <line x1="375" y1="660" x2="375" y2="700" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  <line x1="565" y1="660" x2="565" y2="700" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  <line x1="735" y1="660" x2="735" y2="700" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+
+  <!-- GNN Process Flow Right Side Legend -->
+  <rect x="760" y="180" width="125" height="400" rx="5" fill="#fef3c7" stroke="#d97706" stroke-width="1" />
+  <text x="822" y="200" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">GNN 處理流程</text>
+  
+  <circle cx="775" cy="230" r="5" fill="#d97706" />
+  <text x="825" y="235" font-family="Arial" font-size="12" text-anchor="middle">OWL載入</text>
+  
+  <circle cx="775" cy="260" r="5" fill="#d97706" />
+  <text x="825" y="265" font-family="Arial" font-size="12" text-anchor="middle">圖結構轉換</text>
+  
+  <circle cx="775" cy="290" r="5" fill="#d97706" />
+  <text x="825" y="295" font-family="Arial" font-size="12" text-anchor="middle">特徵編碼</text>
+  
+  <circle cx="775" cy="320" r="5" fill="#d97706" />
+  <text x="825" y="325" font-family="Arial" font-size="12" text-anchor="middle">GNN模型載入</text>
+  
+  <circle cx="775" cy="350" r="5" fill="#d97706" />
+  <text x="825" y="355" font-family="Arial" font-size="12" text-anchor="middle">相似產品尋找</text>
+  
+  <circle cx="775" cy="380" r="5" fill="#d97706" />
+  <text x="825" y="385" font-family="Arial" font-size="12" text-anchor="middle">組件預測</text>
+  
+  <circle cx="775" cy="410" r="5" fill="#d97706" />
+  <text x="825" y="415" font-family="Arial" font-size="12" text-anchor="middle">用量推理</text>
+  
+  <circle cx="775" cy="440" r="5" fill="#d97706" />
+  <text x="825" y="445" font-family="Arial" font-size="12" text-anchor="middle">驗證與調整</text>
+  
+  <circle cx="775" cy="470" r="5" fill="#d97706" />
+  <text x="825" y="475" font-family="Arial" font-size="12" text-anchor="middle">生成BOM結構</text>
+  
+  <circle cx="775" cy="500" r="5" fill="#d97706" />
+  <text x="825" y="505" font-family="Arial" font-size="12" text-anchor="middle">轉回OWL格式</text>
+  
+  <circle cx="775" cy="530" r="5" fill="#d97706" />
+  <text x="825" y="535" font-family="Arial" font-size="12" text-anchor="middle">儲存與輸出</text>
+  
+  <!-- Arrowhead Marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+</svg>

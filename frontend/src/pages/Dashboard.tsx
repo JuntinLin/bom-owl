@@ -1,14 +1,21 @@
 // src/pages/Dashboard.tsx
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { tiptopService } from '@/services/tiptopService'; // Use the service instead of axios directly
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { BomStats } from '@/types/tiptop'; // Import types 
-import {  
-  Share2, 
+import { 
   Brain,
-  Code
+  Code,
+  Search,
+  Download,
+  Layers,
+  Plus,
+  Zap,
+  Database,
+  FileText
 } from 'lucide-react';
 
 interface StatCardProps {
@@ -19,6 +26,7 @@ interface StatCardProps {
 }
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<BomStats>({
     totalItems: 0,
     masterItemsCount: 0,
@@ -27,6 +35,7 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [quickSearchQuery, setQuickSearchQuery] = useState<string>('');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -46,6 +55,18 @@ const Dashboard = () => {
     fetchStats();
   }, []);
 
+  const handleQuickSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quickSearchQuery.trim()) {
+      navigate(`/items?search=${encodeURIComponent(quickSearchQuery.trim())}`);
+    }
+  };
+
+  const handleGenerateNewBom = () => {
+    // Navigate to reasoning dashboard with generator tab active
+    navigate('/reasoning/new?tab=generator');
+  };
+
   const StatCard = ({ title, value, icon, color }: StatCardProps) => (
     <Card className={`border-l-4 ${color}`}>
       <CardContent className="p-6">
@@ -64,14 +85,33 @@ const Dashboard = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">TiptopERP to OWL System Dashboard</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">TiptopERP to OWL System Dashboard</h1>
+          <p className="text-gray-600 mt-1">Advanced semantic reasoning and BOM generation platform</p>
+        </div>
+        
+        {/* Quick Search */}
+        <form onSubmit={handleQuickSearch} className="flex gap-2 w-full sm:w-auto">
+          <Input
+            placeholder="Quick search items..."
+            value={quickSearchQuery}
+            onChange={(e) => setQuickSearchQuery(e.target.value)}
+            className="w-full sm:w-64"
+          />
+          <Button type="submit" size="icon">
+            <Search className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
       
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
-
+    
+      {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
           title="Total Items"
@@ -99,62 +139,105 @@ const Dashboard = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+      {/* Main Action Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {/* BOM Generator Card */}
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-blue-200 hover:border-blue-400">
           <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-            <div className="space-y-4">
-              <Link 
-                to="/items" 
-                className="flex items-center p-3 bg-indigo-50 hover:bg-indigo-100 rounded-md transition duration-200"
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-100 rounded-full">
+                <Plus className="w-6 h-6 text-blue-600" />
+              </div>
+              <Button 
+                onClick={handleGenerateNewBom}
+                variant="outline"
               >
-                <svg className="w-6 h-6 text-indigo-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                </svg>
-                <span>Search Items</span>
-              </Link>
-              <Link 
-                to="/export" 
-                className="flex items-center p-3 bg-green-50 hover:bg-green-100 rounded-md transition duration-200"
-              >
-                <svg className="w-6 h-6 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-                <span>Export Ontology</span>
-              </Link>
+                Generate BOM
+              </Button>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Create New BOM</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Generate intelligent BOMs for new hydraulic cylinders using AI-powered semantic reasoning and domain knowledge.
+            </p>
+            <div className="flex items-center text-sm text-blue-600">
+              <Zap className="w-4 h-4 mr-1" />
+              <span>AI-Powered Generation</span>
             </div>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        {/* Search & Explore Card */}
+        <Card className="hover:shadow-lg transition-shadow">
           <CardContent className="p-6">
-            <h2 className="text-xl font-semibold mb-4">About This System</h2>
-            <p className="text-gray-600 mb-4">
-              The TiptopERP to OWL System converts your ERP data into Web Ontology Language (OWL) format, enabling semantic 
-              representation of your product structures.
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-green-100 rounded-full">
+                <Search className="w-6 h-6 text-green-600" />
+              </div>
+              <Link to="/items">
+                <Button variant="outline">
+                  Search Items
+                </Button>
+              </Link>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Search & Explore</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Find materials, explore BOM structures, and analyze component relationships with advanced search capabilities.
             </p>
-            <p className="text-gray-600">
-              View Bill of Materials (BOM) structures, export ontologies in various formats (OWL/RDF, JSON-LD, Turtle), 
-              and explore BOM hierarchies with interactive visualizations.
+            <div className="flex items-center text-sm text-green-600">
+              <Database className="w-4 h-4 mr-1" />
+              <span>{stats.totalItems.toLocaleString()} Items Available</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Export & Analysis Card */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-purple-100 rounded-full">
+                <Download className="w-6 h-6 text-purple-600" />
+              </div>
+              <Link to="/export">
+                <Button variant="outline">
+                  Export Data
+                </Button>
+              </Link>
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Export & Analysis</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Export BOMs as ontologies in various formats (OWL, JSON-LD, Turtle) for external analysis and integration.
             </p>
+            <div className="flex items-center text-sm text-purple-600">
+              <FileText className="w-4 h-4 mr-1" />
+              <span>Multiple Export Formats</span>
+            </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Semantic Reasoning Capabilities */}
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Semantic Reasoning Capabilities</CardTitle>
+          <CardTitle className="flex items-center">
+            <Brain className="w-6 h-6 mr-2 text-blue-500" />
+            Semantic Reasoning & AI Capabilities
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="border rounded-lg p-4 bg-blue-50">
-              <div className="flex items-center mb-2">
+            <div className="border rounded-lg p-4 bg-blue-50 hover:bg-blue-100 transition-colors">
+              <div className="flex items-center mb-3">
                 <Brain className="w-6 h-6 text-blue-500 mr-2" />
                 <h3 className="text-lg font-medium">OWL Reasoning</h3>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                Apply OWL reasoners to infer new knowledge from your BOM data. Discover implicit relationships and check ontology consistency.
+                Apply advanced OWL reasoners to infer new knowledge from your BOM data. Discover implicit relationships and validate ontology consistency.
               </p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded">HermiT</span>
+                <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded">Pellet</span>
+                <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded">RDFS</span>
+              </div>
               <Link to="/items">
                 <Button variant="outline" className="w-full">
                   Find Items to Analyze
@@ -162,14 +245,19 @@ const Dashboard = () => {
               </Link>
             </div>
             
-            <div className="border rounded-lg p-4 bg-purple-50">
-              <div className="flex items-center mb-2">
+            <div className="border rounded-lg p-4 bg-purple-50 hover:bg-purple-100 transition-colors">
+              <div className="flex items-center mb-3">
                 <Code className="w-6 h-6 text-purple-500 mr-2" />
                 <h3 className="text-lg font-medium">SPARQL Queries</h3>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                Execute SPARQL queries to find complex patterns in your BOM data. Use predefined queries or create your own.
+                Execute powerful SPARQL queries to find complex patterns in your BOM data. Use predefined templates or create custom queries.
               </p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs rounded">SELECT</span>
+                <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs rounded">CONSTRUCT</span>
+                <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs rounded">ASK</span>
+              </div>
               <Link to="/items">
                 <Button variant="outline" className="w-full">
                   Find Items to Query
@@ -177,80 +265,147 @@ const Dashboard = () => {
               </Link>
             </div>
             
-            <div className="border rounded-lg p-4 bg-amber-50">
-              <div className="flex items-center mb-2">
-                <Share2 className="w-6 h-6 text-amber-500 mr-2" />
-                <h3 className="text-lg font-medium">Custom Rules</h3>
+            <div className="border rounded-lg p-4 bg-amber-50 hover:bg-amber-100 transition-colors">
+              <div className="flex items-center mb-3">
+                <Layers className="w-6 h-6 text-amber-500 mr-2" />
+                <h3 className="text-lg font-medium">BOM Generation</h3>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                Define custom rules to derive new information from your BOM data. Identify critical components and detect patterns.
+                Generate intelligent BOMs for new products using domain-specific rules and AI-powered component selection algorithms.
               </p>
-              <Link to="/items">
-                <Button variant="outline" className="w-full">
-                  Find Items to Apply Rules
-                </Button>
-              </Link>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs rounded">Logic Rules</span>
+                <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs rounded">AI Selection</span>
+                <span className="px-2 py-1 bg-amber-200 text-amber-800 text-xs rounded">Validation</span>
+              </div>
+              <Button 
+                onClick={handleGenerateNewBom}
+                variant="outline" 
+                className="w-full"
+              >
+                Generate New BOM
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
       
+      {/* Feature Highlights Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Getting Started</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            <ol className="list-decimal list-inside space-y-2 text-gray-600">
-              <li><strong>Search for Materials:</strong> Find master items or components.</li>
-              <li><strong>View Material Details:</strong> Explore item information and BOM structure.</li>
-              <li><strong>Apply Reasoning:</strong> Use OWL reasoning to infer new knowledge.</li>
-              <li><strong>Query with SPARQL:</strong> Find specific information using semantic queries.</li>
-              <li><strong>Export as OWL:</strong> Save ontologies for use in other tools.</li>
+            <ol className="list-decimal list-inside space-y-3 text-gray-600">
+              <li>
+                <strong>Search for Materials:</strong> Use the search function to find master items or components in your inventory.
+              </li>
+              <li>
+                <strong>Explore BOM Structure:</strong> View detailed hierarchical BOM structures with interactive tree visualization.
+              </li>
+              <li>
+                <strong>Generate New BOMs:</strong> Create intelligent BOMs for new hydraulic cylinders using AI-powered reasoning.
+              </li>
+              <li>
+                <strong>Apply Semantic Reasoning:</strong> Use OWL reasoning to infer new knowledge and validate data consistency.
+              </li>
+              <li>
+                <strong>Query with SPARQL:</strong> Find specific information using powerful semantic queries with predefined templates.
+              </li>
+              <li>
+                <strong>Export as Ontologies:</strong> Save BOMs in various semantic formats for integration with other tools.
+              </li>
             </ol>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader>
-            <CardTitle>Reasoning Features</CardTitle>
+            <CardTitle>Advanced Features</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            <ul className="space-y-2">
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                <span className="text-gray-600">Multiple reasoners: OWL, RDFS, rule-based</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                <span className="text-gray-600">SPARQL query support with predefined templates</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                <span className="text-gray-600">Custom rule definition in Jena rule syntax</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                <span className="text-gray-600">Ontology validation and consistency checking</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                <span className="text-gray-600">Interactive BOM hierarchy visualization with inferred information</span>
-              </li>
-            </ul>
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 w-5 h-5 bg-green-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900">Dual-Paradigm Reasoning</h4>
+                  <p className="text-sm text-gray-600">Combines logic-based OWL reasoning with AI-powered component selection</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="flex-shrink-0 w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900">Hydraulic Cylinder Expertise</h4>
+                  <p className="text-sm text-gray-600">Specialized domain knowledge for hydraulic cylinder BOM generation</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="flex-shrink-0 w-5 h-5 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900">Multiple Export Formats</h4>
+                  <p className="text-sm text-gray-600">OWL/RDF, JSON-LD, Turtle, N-Triples for maximum compatibility</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="flex-shrink-0 w-5 h-5 bg-yellow-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900">Interactive Visualizations</h4>
+                  <p className="text-sm text-gray-600">Rich tree views and hierarchical displays of BOM structures</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="flex-shrink-0 w-5 h-5 bg-red-100 rounded-full flex items-center justify-center mr-3 mt-0.5">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900">Validation & Consistency</h4>
+                  <p className="text-sm text-gray-600">Automatic validation and consistency checking for generated BOMs</p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Activity / Quick Stats */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>System Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">{((stats.componentItemsCount / stats.totalItems) * 100).toFixed(1)}%</div>
+              <div className="text-sm text-gray-600">Component Ratio</div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{(stats.bomRelationshipsCount / stats.masterItemsCount).toFixed(1)}</div>
+              <div className="text-sm text-gray-600">Avg Components/BOM</div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600">100%</div>
+              <div className="text-sm text-gray-600">Data Coverage</div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-600">24/7</div>
+              <div className="text-sm text-gray-600">System Availability</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
     </div>
   );

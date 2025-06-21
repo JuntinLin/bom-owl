@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.jfc.owl.TiptopToOwlConverter;
+import com.jfc.owl.ontology.HydraulicCylinderOntology;
 import com.jfc.rdb.tiptop.entity.BmaFile;
 import com.jfc.rdb.tiptop.entity.BmbFile;
 import com.jfc.rdb.tiptop.entity.ImaFile;
@@ -18,6 +19,8 @@ import com.jfc.rdb.tiptop.repository.ImaRepository;
 //import com.jfc.tiptop.repository.*;
 import org.apache.jena.ontology.Individual;
 import org.apache.jena.ontology.OntModel;
+import org.apache.jena.ontology.OntModelSpec;
+import org.apache.jena.rdf.model.ModelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +36,9 @@ public class BomOwlExportService {
 
 	@Autowired
 	private BmbRepository bmbFileRepository;
+	
+	@Autowired
+	private HydraulicCylinderOntology hydraulicCylinderOntology;
 
 	/**
 	 * Exports complete BOM structure to OWL ontology
@@ -43,6 +49,8 @@ public class BomOwlExportService {
 	 */
 	@Transactional(readOnly = true)
 	public String exportAllBomsToOwl(String outputPath, String format) {
+		logger.info("Exporting all BOMs to OWL format: {}", format);
+		
 		TiptopToOwlConverter converter = new TiptopToOwlConverter();
 		Map<String, Individual> materialMap = new HashMap<>();
 
@@ -140,6 +148,8 @@ public class BomOwlExportService {
 	 */
 	@Transactional(readOnly = true)
 	public String exportBomForMasterItem(String masterItemCode, String outputPath, String format) {
+		logger.info("Exporting BOM for master item: {} to format: {}", masterItemCode, format);
+		
 		TiptopToOwlConverter converter = new TiptopToOwlConverter();
 		Map<String, Individual> materialMap = new HashMap<>();
 
@@ -179,7 +189,8 @@ public class BomOwlExportService {
 		// Export the ontology
 		String filename = outputPath + File.separator + "tiptop_bom_" + masterItemCode + ".owl";
 		converter.exportOntology(filename, format);
-
+		
+		logger.info("BOM for master item {} exported successfully to: {}", masterItemCode, filename);
 		return filename;
 	}
 
@@ -293,6 +304,8 @@ public class BomOwlExportService {
 	 */
 	@Transactional(readOnly = true)
 	public OntModel getBomOntologyForMasterItem(String masterItemCode) {
+		logger.debug("Getting BOM ontology for master item: {}", masterItemCode);
+		
 		TiptopToOwlConverter converter = new TiptopToOwlConverter();
 		Map<String, Individual> materialMap = new HashMap<>();
 
@@ -322,7 +335,308 @@ public class BomOwlExportService {
 			converter.convertBomStructure(bma, bmbList, materialMap);
 		}
 
-		return converter.getOntModel();
+		// Check if this is a hydraulic cylinder and enhance with domain knowledge
+		OntModel baseModel = converter.getOntModel();
+		if (isHydraulicCylinderItem(masterItemCode)) {
+			return enhanceWithHydraulicCylinderKnowledge(baseModel, masterItemCode);
+		}
+
+		return baseModel;
+	}
+	
+	/**
+	 * Enhance the base BOM model with hydraulic cylinder domain knowledge
+	 */
+	private OntModel enhanceWithHydraulicCylinderKnowledge(OntModel baseModel, String masterItemCode) {
+		try {
+			logger.debug("Enhancing model with hydraulic cylinder knowledge for: {}", masterItemCode);
+			
+			// Initialize the hydraulic cylinder ontology
+			hydraulicCylinderOntology.initializeHydraulicCylinderOntology();
+			
+			// Create enhanced model
+			OntModel enhancedModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_DL_MEM);
+			enhancedModel.add(baseModel);
+			enhancedModel.add(hydraulicCylinderOntology.getOntologyModel());
+			
+			// Extract specifications and create hydraulic cylinder individual
+			Map<String, String> specs = extractSpecificationsFromCode(masterItemCode);
+			if (!specs.isEmpty()) {
+				hydraulicCylinderOntology.createHydraulicCylinderIndividual(masterItemCode, specs);
+			}
+			
+			logger.debug("Successfully enhanced model with hydraulic cylinder knowledge");
+			return enhancedModel;
+			
+		} catch (Exception e) {
+			logger.warn("Failed to enhance model with hydraulic cylinder knowledge: {}", e.getMessage());
+			return baseModel; // Return base model if enhancement fails
+		}
+	}
+	
+	/**
+	 * Extract hydraulic cylinder specifications from item code
+	 */
+	private Map<String, String> extractSpecificationsFromCode(String itemCode) {
+		Map<String, String> specs = new HashMap<>();
+		
+		if (itemCode == null || itemCode.length() < 8) {
+			return specs;
+		}
+		
+		try {
+			// Extract series (positions 3-4)
+			if (itemCode.length() >= 4) {
+				specs.put("series", itemCode.substring(2, 4));
+			}
+			
+			// Extract bore (positions 6-8)
+			if (itemCode.length() >= 8) {
+				String boreStr = itemCode.substring(5, 8);
+				specs.put("bore", String.valueOf(Integer.parseInt(boreStr)));
+			}
+			
+			// Extract stroke (positions 11-14)
+			if (itemCode.length() >= 14) {
+				String strokeStr = itemCode.substring(10, 14);
+				specs.put("stroke", String.valueOf(Integer.parseInt(strokeStr)));
+			}
+			
+			// Extract rod end type (position 15)
+			if (itemCode.length() >= 15) {
+				specs.put("rodEndType", itemCode.substring(14, 15));
+			}
+			
+		} catch (Exception e) {
+			logger.warn("Error extracting specifications from code {}: {}", itemCode, e.getMessage());
+		}
+		
+		return specs;
+	}
+	
+	/**
+	 * Check if an item is a hydraulic cylinder based on its code pattern
+	 */
+	private boolean isHydraulicCylinderItem(String itemCode) {
+		return itemCode != null && 
+			   itemCode.length() >= 2 && 
+			   (itemCode.startsWith("3") || itemCode.startsWith("4"));
+	}
+	
+	/**
+	 * NEW METHOD: Get all master item codes from the database
+	 * This method is required by OWLKnowledgeBaseService
+	 * 
+	 * @return List of all master item codes that have BOM structures
+	 */
+	@Transactional(readOnly = true)
+	public List<String> getAllMasterItemCodes() {
+		logger.info("Retrieving all master item codes from database");
+		
+		try {
+			// Get all distinct master item codes from BMA table
+			List<String> masterItemCodes = bmaFileRepository.findDistinctMasterItemCodes();
+			
+			// Filter to only include items of type "S" and item type "130 HC" if needed
+			List<String> filteredCodes = new ArrayList<>();
+			
+			for (String masterItemCode : masterItemCodes) {
+				try {
+					ImaFile imaFile = imaFileRepository.findById(masterItemCode).orElse(null);
+					if (imaFile != null && 
+						"S".equals(imaFile.getIma09()) && 
+						"130 HC".equals(imaFile.getIma10())) {
+						filteredCodes.add(masterItemCode);
+					}
+				} catch (Exception e) {
+					logger.warn("Error checking master item {}: {}", masterItemCode, e.getMessage());
+				}
+			}
+			
+			logger.info("Found {} master item codes (filtered from {} total)", 
+					   filteredCodes.size(), masterItemCodes.size());
+			
+			return filteredCodes;
+			
+		} catch (Exception e) {
+			logger.error("Error retrieving master item codes", e);
+			throw new RuntimeException("Failed to retrieve master item codes", e);
+		}
+	}
+	
+	/**
+	 * NEW METHOD: Get master item codes with BOM statistics
+	 * 
+	 * @return Map containing master item codes and their BOM statistics
+	 */
+	@Transactional(readOnly = true)
+	public Map<String, Object> getMasterItemStatistics() {
+		logger.info("Generating master item statistics");
+		
+		Map<String, Object> statistics = new HashMap<>();
+		
+		try {
+			List<String> allMasterCodes = getAllMasterItemCodes();
+			Map<String, Integer> componentCounts = new HashMap<>();
+			Map<String, Boolean> hasHierarchy = new HashMap<>();
+			
+			int totalMasterItems = allMasterCodes.size();
+			int hydraulicCylinders = 0;
+			int itemsWithHierarchy = 0;
+			
+			for (String masterCode : allMasterCodes) {
+				try {
+					// Count components for this master item
+					List<BmaFile> bomHeaders = bmaFileRepository.findByIdBma01(masterCode);
+					int componentCount = 0;
+					boolean hasSubComponents = false;
+					
+					for (BmaFile bma : bomHeaders) {
+						List<BmbFile> components = bmbFileRepository.findByBmaFile(bma);
+						componentCount += components.size();
+						
+						// Check if any component has its own BOM (has hierarchy)
+						for (BmbFile component : components) {
+							List<BmaFile> subBoms = bmaFileRepository.findByIdBma01(component.getId().getBmb03());
+							if (!subBoms.isEmpty()) {
+								hasSubComponents = true;
+							}
+						}
+					}
+					
+					componentCounts.put(masterCode, componentCount);
+					hasHierarchy.put(masterCode, hasSubComponents);
+					
+					if (hasSubComponents) {
+						itemsWithHierarchy++;
+					}
+					
+					// Check if hydraulic cylinder
+					if (isHydraulicCylinderItem(masterCode)) {
+						hydraulicCylinders++;
+					}
+					
+				} catch (Exception e) {
+					logger.warn("Error processing statistics for master item {}: {}", masterCode, e.getMessage());
+				}
+			}
+			
+			statistics.put("totalMasterItems", totalMasterItems);
+			statistics.put("hydraulicCylinders", hydraulicCylinders);
+			statistics.put("itemsWithHierarchy", itemsWithHierarchy);
+			statistics.put("componentCounts", componentCounts);
+			statistics.put("hasHierarchy", hasHierarchy);
+			
+			// Calculate average components per master item
+			double avgComponents = componentCounts.values().stream()
+				.mapToInt(Integer::intValue)
+				.average()
+				.orElse(0.0);
+			statistics.put("averageComponentsPerMaster", Math.round(avgComponents * 100.0) / 100.0);
+			
+			logger.info("Generated statistics for {} master items", totalMasterItems);
+			
+		} catch (Exception e) {
+			logger.error("Error generating master item statistics", e);
+			throw new RuntimeException("Failed to generate statistics", e);
+		}
+		
+		return statistics;
+	}
+	
+	/**
+	 * NEW METHOD: Check if a master item exists and has BOM structure
+	 * 
+	 * @param masterItemCode The master item code to check
+	 * @return true if the master item exists and has BOM structure
+	 */
+	@Transactional(readOnly = true)
+	public boolean hasBomStructure(String masterItemCode) {
+		try {
+			// Check if master item exists
+			Optional<ImaFile> masterIma = imaFileRepository.findById(masterItemCode);
+			if (!masterIma.isPresent()) {
+				return false;
+			}
+			
+			// Check if it has BOM structure
+			List<BmaFile> bomHeaders = bmaFileRepository.findByIdBma01(masterItemCode);
+			return !bomHeaders.isEmpty();
+			
+		} catch (Exception e) {
+			logger.warn("Error checking BOM structure for {}: {}", masterItemCode, e.getMessage());
+			return false;
+		}
+	}
+	
+	/**
+	 * NEW METHOD: Get BOM summary information for a master item
+	 * 
+	 * @param masterItemCode The master item code
+	 * @return Map containing BOM summary information
+	 */
+	@Transactional(readOnly = true)
+	public Map<String, Object> getBomSummary(String masterItemCode) {
+		logger.debug("Getting BOM summary for master item: {}", masterItemCode);
+		
+		Map<String, Object> summary = new HashMap<>();
+		
+		try {
+			// Get master item information
+			ImaFile masterIma = imaFileRepository.findById(masterItemCode)
+				.orElseThrow(() -> new IllegalArgumentException("Master item not found: " + masterItemCode));
+			
+			summary.put("masterItemCode", masterItemCode);
+			summary.put("masterItemName", masterIma.getIma02());
+			summary.put("masterItemSpec", masterIma.getIma021());
+			summary.put("isHydraulicCylinder", isHydraulicCylinderItem(masterItemCode));
+			
+			// Get BOM structure information
+			List<BmaFile> bomHeaders = bmaFileRepository.findByIdBma01(masterItemCode);
+			summary.put("bomCount", bomHeaders.size());
+			
+			if (!bomHeaders.isEmpty()) {
+				int totalComponents = 0;
+				Set<String> uniqueComponents = new HashSet<>();
+				List<Map<String, Object>> bomDetails = new ArrayList<>();
+				
+				for (BmaFile bma : bomHeaders) {
+					List<BmbFile> components = bmbFileRepository.findByBmaFile(bma);
+					totalComponents += components.size();
+					
+					Map<String, Object> bomDetail = new HashMap<>();
+					bomDetail.put("characteristicCode", bma.getId().getBma06());
+					bomDetail.put("componentCount", components.size());
+					bomDetails.add(bomDetail);
+					
+					// Collect unique component codes
+					for (BmbFile component : components) {
+						uniqueComponents.add(component.getId().getBmb03());
+					}
+				}
+				
+				summary.put("totalComponents", totalComponents);
+				summary.put("uniqueComponents", uniqueComponents.size());
+				summary.put("bomDetails", bomDetails);
+				
+				// Check for hierarchical structure
+				boolean hasHierarchy = uniqueComponents.stream()
+					.anyMatch(componentCode -> !bmaFileRepository.findByIdBma01(componentCode).isEmpty());
+				summary.put("hasHierarchy", hasHierarchy);
+				
+				// Add hydraulic cylinder specific information if applicable
+				if (isHydraulicCylinderItem(masterItemCode)) {
+					Map<String, String> specs = extractSpecificationsFromCode(masterItemCode);
+					summary.put("hydraulicCylinderSpecs", specs);
+				}
+			}
+			
+		} catch (Exception e) {
+			logger.error("Error getting BOM summary for {}: {}", masterItemCode, e.getMessage());
+			throw new RuntimeException("Failed to get BOM summary", e);
+		}
+		
+		return summary;
 	}
 
 	/**
@@ -472,4 +786,5 @@ public class BomOwlExportService {
 			this.children = children;
 		}
 	}
+
 }
