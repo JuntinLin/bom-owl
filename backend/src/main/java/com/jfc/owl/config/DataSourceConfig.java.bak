@@ -1,0 +1,102 @@
+package com.jfc.owl.config;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+import jakarta.persistence.EntityManagerFactory;
+
+import javax.sql.DataSource;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Multi-DataSource Configuration for OWL Application
+ * Configures H2 (Primary), Oracle, and MSSQL datasources
+ */
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(
+    basePackages = "com.jfc.owl.repository",
+    entityManagerFactoryRef = "primaryEntityManagerFactory",
+    transactionManagerRef = "primaryTransactionManager"
+)
+public class DataSourceConfig {
+
+    // Primary DataSource (H2 for OWL Knowledge Base)
+    @Primary
+    @Bean(name = "primaryDataSourceProperties")
+    @ConfigurationProperties("spring.datasource")
+    public DataSourceProperties primaryDataSourceProperties() {
+        return new DataSourceProperties();
+    }
+
+    @Primary
+    @Bean(name = "primaryDataSource")
+    @ConfigurationProperties("spring.datasource.configuration")
+    public DataSource primaryDataSource() {
+        return primaryDataSourceProperties().initializeDataSourceBuilder().build();
+    }
+
+    @Primary
+    @Bean(name = "primaryEntityManagerFactory")
+    public LocalContainerEntityManagerFactoryBean primaryEntityManagerFactory(
+            EntityManagerFactoryBuilder builder,
+            @Qualifier("primaryDataSource") DataSource dataSource) {
+        
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("hibernate.hbm2ddl.auto", "create-drop");
+        properties.put("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
+        properties.put("hibernate.show_sql", true);
+        properties.put("hibernate.format_sql", true);
+        
+        return builder
+                .dataSource(dataSource)
+                .packages("com.jfc.owl.entity")
+                .persistenceUnit("primary")
+                .properties(properties)
+                .build();
+    }
+
+    @Primary
+    @Bean(name = "primaryTransactionManager")
+    public PlatformTransactionManager primaryTransactionManager(
+            @Qualifier("primaryEntityManagerFactory") EntityManagerFactory entityManagerFactory) {
+        return new JpaTransactionManager(entityManagerFactory);
+    }
+
+    // Oracle DataSource (for Tiptop)
+    @Bean(name = "oracleDataSourceProperties")
+    @ConfigurationProperties("spring.datasource.oracle")
+    public DataSourceProperties oracleDataSourceProperties() {
+        return new DataSourceProperties();
+    }
+
+    @Bean(name = "oracleDataSource")
+    @ConfigurationProperties("spring.datasource.oracle.configuration")
+    public DataSource oracleDataSource() {
+        return oracleDataSourceProperties().initializeDataSourceBuilder().build();
+    }
+
+    // MSSQL DataSource (for HRM)
+    @Bean(name = "mssqlDataSourceProperties")
+    @ConfigurationProperties("spring.datasource.mssql")
+    public DataSourceProperties mssqlDataSourceProperties() {
+        return new DataSourceProperties();
+    }
+
+    @Bean(name = "mssqlDataSource")
+    @ConfigurationProperties("spring.datasource.mssql.configuration")
+    public DataSource mssqlDataSource() {
+        return mssqlDataSourceProperties().initializeDataSourceBuilder().build();
+    }
+}
