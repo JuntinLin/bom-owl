@@ -1,0 +1,28 @@
+# Backend (Spring Boot) exclusions
+backend/target/
+backend/.classpath
+backend/.project
+backend/.settings/
+backend/bin/
+backend/*.log
+backend/logs/
+
+# Frontend (React) exclusions
+frontend/node_modules/
+frontend/.env
+frontend/.env.local
+frontend/build/
+frontend/dist/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# IDE specific files
+.idea/
+*.iml
+.vscode/
+*.sublime-workspace
+
+# General
+.DS_Store
+# /backend/
