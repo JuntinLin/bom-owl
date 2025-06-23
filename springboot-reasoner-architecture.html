@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+  <!-- Background -->
+  <rect width="900" height="700" fill="#f8fafc" />
+  
+  <!-- Title -->
+  <text x="450" y="40" font-family="Arial" font-size="24" font-weight="bold" text-anchor="middle">Spring Boot + OWL 推理機系統架構</text>
+  
+  <!-- Spring Boot Application Container -->
+  <rect x="50" y="80" width="800" height="540" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="2" />
+  <text x="450" y="110" font-family="Arial" font-size="20" font-weight="bold" text-anchor="middle">Spring Boot Application</text>
+  
+  <!-- Web Layer -->
+  <rect x="100" y="140" width="700" height="100" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" />
+  <text x="450" y="165" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">Web 層</text>
+  
+  <!-- Web Layer Components -->
+  <rect x="130" y="180" width="150" height="40" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="205" y="205" font-family="Arial" font-size="14" text-anchor="middle">RestController</text>
+  
+  <rect x="310" y="180" width="150" height="40" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="385" y="205" font-family="Arial" font-size="14" text-anchor="middle">DTO</text>
+  
+  <rect x="490" y="180" width="150" height="40" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="565" y="205" font-family="Arial" font-size="14" text-anchor="middle">Request/Response</text>
+  
+  <rect x="670" y="180" width="100" height="40" rx="5" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
+  <text x="720" y="205" font-family="Arial" font-size="14" text-anchor="middle">CORS</text>
+  
+  <!-- Service Layer -->
+  <rect x="100" y="260" width="700" height="120" rx="10" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2" />
+  <text x="450" y="285" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">Service 層</text>
+  
+  <!-- Service Layer Components -->
+  <rect x="130" y="305" width="130" height="50" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="195" y="335" font-family="Arial" font-size="14" text-anchor="middle">BomService</text>
+  
+  <rect x="280" y="305" width="160" height="50" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="360" y="335" font-family="Arial" font-size="14" text-anchor="middle">OntologyService</text>
+  
+  <rect x="460" y="305" width="160" height="50" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="540" y="335" font-family="Arial" font-size="14" text-anchor="middle">ReasoningService</text>
+  
+  <rect x="640" y="305" width="130" height="50" rx="5" fill="#bae6fd" stroke="#0ea5e9" stroke-width="1" />
+  <text x="705" y="335" font-family="Arial" font-size="14" text-anchor="middle">BomGenerator</text>
+  
+  <!-- Reasoning Engine Layer -->
+  <rect x="100" y="400" width="700" height="140" rx="10" fill="#d8b4fe" stroke="#8b5cf6" stroke-width="2" />
+  <text x="450" y="425" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">推理引擎層</text>
+  
+  <!-- Reasoning Engine Components -->
+  <rect x="130" y="445" width="300" height="75" rx="5" fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1" />
+  <text x="280" y="470" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">OWLAPI</text>
+  <text x="280" y="495" font-family="Arial" font-size="12" text-anchor="middle">本體載入、操作、查詢</text>
+  
+  <rect x="470" y="445" width="300" height="75" rx="5" fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1" />
+  <text x="620" y="470" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle">推理機</text>
+  <text x="620" y="495" font-family="Arial" font-size="12" text-anchor="middle">HermiT / Pellet</text>
+  
+  <!-- Data Layer -->
+  <rect x="100" y="560" width="700" height="40" rx="10" fill="#a7f3d0" stroke="#10b981" stroke-width="2" />
+  <text x="450" y="585" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">Repository 層 (JPA/JDBC)</text>
+  
+  <!-- External Components -->
+  <rect x="50" y="640" width="160" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="130" y="665" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">Oracle 資料庫</text>
+  
+  <rect x="370" y="640" width="160" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="450" y="665" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">本體檔案 (.owl)</text>
+  
+  <rect x="690" y="640" width="160" height="40" rx="10" fill="#fed7aa" stroke="#f97316" stroke-width="2" />
+  <text x="770" y="665" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle">規則檔案 (.swrl)</text>
+  
+  <!-- Connection Lines -->
+  <!-- Web to Service -->
+  <line x1="450" y1="240" x2="450" y2="260" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- Service to Reasoning -->
+  <line x1="450" y1="380" x2="450" y2="400" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- Reasoning to Data -->
+  <line x1="450" y1="540" x2="450" y2="560" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- Data to External -->
+  <line x1="130" y1="600" x2="130" y2="640" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  <line x1="450" y1="600" x2="450" y2="640" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  <line x1="770" y1="600" x2="770" y2="640" stroke="#64748b" stroke-width="2" marker-end="url(#arrowhead)" />
+  
+  <!-- Arrowhead Marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+</svg>
