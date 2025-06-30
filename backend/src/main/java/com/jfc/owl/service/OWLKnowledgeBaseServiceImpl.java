@@ -13,9 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.jfc.owl.entity.OWLKnowledgeBase;
+import com.jfc.owl.entity.ProcessingLog;
 import com.jfc.owl.ontology.HydraulicCylinderOntology;
 import com.jfc.owl.repository.OWLKnowledgeBaseRepository;
+import com.jfc.owl.repository.ProcessingLogRepository;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.transaction.Transactional;
 
 import java.io.File;
@@ -27,7 +30,15 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletionService;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +65,9 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 
 	@Autowired
 	private OWLKnowledgeBaseRepository knowledgeBaseRepository;
+	
+	@Autowired
+	private ProcessingLogRepository processingLogRepository;
 
 	@Autowired
 	private BomOwlExportService bomOwlExportService;
@@ -70,6 +84,9 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 	private OntModel masterKnowledgeBase;
 	private LocalDateTime lastMasterUpdate;
 
+	// ExecutorService for handling async tasks with timeout
+	private final ExecutorService executorService = Executors.newFixedThreadPool(5);
+
 	/**
 	 * 初始化知識庫服務
 	 */
@@ -80,12 +97,15 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		createDirectories();
 
 		// Initialize hydraulic cylinder ontology
-		try {
-			hydraulicCylinderOntology.initializeHydraulicCylinderOntology();
-			logger.info("Hydraulic cylinder ontology initialized successfully");
-		} catch (Exception e) {
-			logger.warn("Failed to initialize hydraulic cylinder ontology: {}", e.getMessage());
-		}
+		/*
+		 * try { hydraulicCylinderOntology.initializeHydraulicCylinderOntology();
+		 * logger.info("Hydraulic cylinder ontology initialized successfully"); } catch
+		 * (Exception e) {
+		 * logger.warn("Failed to initialize hydraulic cylinder ontology: {}",
+		 * e.getMessage()); }
+		 */
+		// Initialize hydraulic cylinder ontology with timeout
+		initializeHydraulicCylinderOntologyWithTimeout();
 
 		// 載入現有的OWL檔案
 		loadExistingOWLFiles();
@@ -94,6 +114,34 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		updateMasterKnowledgeBase();
 
 		logger.info("OWL Knowledge Base Service initialized successfully");
+	}
+
+	/**
+	 * Initialize hydraulic cylinder ontology with timeout protection
+	 */
+	private void initializeHydraulicCylinderOntologyWithTimeout() {
+		logger.info("Initializing hydraulic cylinder ontology with timeout protection");
+
+		Future<Void> future = executorService.submit(() -> {
+			try {
+				hydraulicCylinderOntology.initializeHydraulicCylinderOntology();
+				logger.info("Hydraulic cylinder ontology initialized successfully");
+			} catch (Exception e) {
+				logger.error("Failed to initialize hydraulic cylinder ontology", e);
+				throw new RuntimeException(e);
+			}
+			return null;
+		});
+
+		try {
+			// Wait up to 10 seconds for initialization
+			future.get(10, TimeUnit.SECONDS);
+		} catch (TimeoutException e) {
+			logger.error("Timeout initializing hydraulic cylinder ontology after 10 seconds");
+			future.cancel(true);
+		} catch (InterruptedException | ExecutionException e) {
+			logger.error("Error initializing hydraulic cylinder ontology", e);
+		}
 	}
 
 	/**
@@ -230,21 +278,79 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 
 		} catch (Exception e) {
 			logger.error("=== Export failed for item: {} ===", masterItemCode, e);
-	        throw new RuntimeException("Failed to export and save OWL file for " + masterItemCode, e);
+			throw new RuntimeException("Failed to export and save OWL file for " + masterItemCode, e);
 		}
 	}
 
 	/**
-	 * 批量匯出所有BOM並保存到知識庫
+	 * Export OWL file with timeout protection
+	 */
+	private String exportWithTimeout(String masterItemCode, String format, Boolean includeHierarchy)
+			throws InterruptedException, ExecutionException, TimeoutException {
+
+		Future<String> future = executorService.submit(() -> {
+			try {
+				if (includeHierarchy) {
+					return bomOwlExportService.exportCompleteHierarchyBomToOwl(masterItemCode, knowledgeBasePath,
+							format);
+				} else {
+					return bomOwlExportService.exportBomForMasterItem(masterItemCode, knowledgeBasePath, format);
+				}
+			} catch (Exception e) {
+				logger.error("Failed to export OWL from ERP for item: {}", masterItemCode, e);
+				throw new RuntimeException("ERP export failed: " + e.getMessage(), e);
+			}
+		});
+
+		try {
+			// Wait up to 30 seconds for export
+			return future.get(30, TimeUnit.SECONDS);
+		} catch (TimeoutException e) {
+			logger.error("Timeout exporting OWL file after 30 seconds for item: {}", masterItemCode);
+			future.cancel(true);
+			throw e;
+		}
+	}
+
+	/**
+	 * Load OWL model with timeout protection
+	 */
+	private OntModel loadOWLModelWithTimeout(String filePath, int timeoutSeconds)
+			throws InterruptedException, ExecutionException, TimeoutException {
+
+		Future<OntModel> future = executorService.submit(() -> loadOWLModel(filePath));
+
+		try {
+			return future.get(timeoutSeconds, TimeUnit.SECONDS);
+		} catch (TimeoutException e) {
+			logger.error("Timeout loading OWL model after {} seconds from: {}", timeoutSeconds, filePath);
+			future.cancel(true);
+			throw e;
+		}
+	}
+
+	/**
+	 * 批量匯出所有BOM並保存到知識庫 - 優化版本
 	 */
 	// Enhanced batch export with better progress tracking
 	@Override
 	public Map<String, Object> exportAllBOMsToKnowledgeBase(String format, Boolean includeHierarchy) {
 		logger.info("=== Starting batch export of all BOMs ===");
 
+		String batchId = UUID.randomUUID().toString();
 		Map<String, Object> result = new HashMap<>();
 		List<String> successfulExports = new ArrayList<>();
 		List<Map<String, String>> failedExports = new ArrayList<>();
+		
+		// 記錄批次處理開始
+	    ProcessingLog processingLog = createProcessingLog(batchId);
+	    
+	 // 保存處理參數
+	    Map<String, Object> parameters = new HashMap<>();
+	    parameters.put("format", format);
+	    parameters.put("includeHierarchy", includeHierarchy);
+	    processingLog.setProcessingParameters(convertToJson(parameters));
+	    processingLog = saveProcessingLog(processingLog);
 
 		try {
 			// Get all master item codes from ERP
@@ -252,96 +358,154 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 			List<String> masterItemCodes = bomOwlExportService.getAllMasterItemCodes("S", "130 HC");
 			logger.info("Found {} master items to export", masterItemCodes.size());
 
-			if (masterItemCodes.isEmpty()) {
-	            logger.warn("No master items found to export!");
-	            result.put("totalItems", 0);
-	            result.put("successfulExports", successfulExports);
-	            result.put("failedExports", failedExports);
-	            result.put("successCount", 0);
-	            result.put("failureCount", 0);
-	            return result;
-	        }
+			// 立即更新總數並保存
+			processingLog.setTotalItems(masterItemCodes.size());
+			processingLog = saveProcessingLog(processingLog);
 	        
-	        // Process in batches to avoid memory issues
-	        int batchSize = 10;
-			int progressCount = 0;
-			
-			for (String masterItemCode : masterItemCodes) {
-				try {
-					logger.info("Processing item {}/{}: {}", 
-		                    progressCount + 1, masterItemCodes.size(), masterItemCode);
-					exportAndSaveToKnowledgeBase(
-							masterItemCode, format, includeHierarchy,
-							"Batch export from ERP system");
-					successfulExports.add(masterItemCode);
-					logger.info("✓ Successfully exported: {}", masterItemCode);
-					
-				} catch (Exception e) {
-					logger.error("✗ Failed to export item: {}", masterItemCode, e);
-	                
-	                Map<String, String> failureInfo = new HashMap<>();
-	                failureInfo.put("itemCode", masterItemCode);
-	                failureInfo.put("error", e.getMessage());
-	                failureInfo.put("errorType", e.getClass().getSimpleName());
-	                failedExports.add(failureInfo);
-				}
-				progressCount++;
-				// Log progress every 10 items
-	            if (progressCount % batchSize == 0) {
-	                logger.info("=== Progress: {}/{} items processed ({} success, {} failed) ===", 
-	                    progressCount, masterItemCodes.size(), 
-	                    successfulExports.size(), failedExports.size());
-	                
-	                // Optional: flush to database
-	                knowledgeBaseRepository.flush();
-	            }
+			if (masterItemCodes.isEmpty()) {
+				logger.warn("No master items found to export!");
+				result.put("totalItems", 0);
+				result.put("successCount", 0);
+	            result.put("failureCount", 0);
+	            result.put("summary", "No items to export");
+				
+				processingLog.setStatus(ProcessingLog.ProcessingStatus.COMPLETED);
+	            processingLog.setEndTime(LocalDateTime.now());
+	            saveProcessingLog(processingLog); 
+				return result;
 			}
 
+			// Process in batches to avoid memory issues
+			//int batchSize = 10;
+			//int progressCount = 0;
+			// 優化：使用更大的批次大小和更多的執行緒
+	        int batchSize = 50;  // 增加批次大小
+	        int threadPoolSize = 8;  // 增加執行緒數
+	        ExecutorService batchExecutor = Executors.newFixedThreadPool(threadPoolSize);
+	        
+	        // 使用 CompletionService 來更好地處理完成的任務
+	        CompletionService<Map<String, Object>> completionService = 
+	            new ExecutorCompletionService<>(batchExecutor);
+	        
+	        // 提交所有任務
+			for (String masterItemCode : masterItemCodes) {
+				completionService.submit(() -> processSingleItem(masterItemCode, format, includeHierarchy, batchId));
+			}
+			
+			// 處理完成的任務
+	        int processed = 0;
+	        int skippedCount = 0;
+	        while (processed < masterItemCodes.size()) {
+	        	// 再次檢查是否應該繼續
+	            if (!shouldContinueProcessing(batchId)) {
+	                logger.info("Batch processing interrupted during collection phase");
+	                break;
+	            }
+	            try {
+	                Future<Map<String, Object>> future = completionService.poll(
+	                    2, TimeUnit.MINUTES);  // 每個任務最多等待2分鐘
+	                
+	                if (future != null) {
+	                    Map<String, Object> itemResult = future.get();
+	                    String itemCode = (String) itemResult.get("itemCode");
+	                    String status = (String) itemResult.get("status");
+	                    
+	                    if ("success".equals(status)) {
+	                        successfulExports.add(itemCode);
+	                        processingLog.setSuccessCount(successfulExports.size());
+	                    } else if ("failed".equals(status)) {
+	                        Map<String, String> failureInfo = new HashMap<>();
+	                        failureInfo.put("itemCode", itemCode);
+	                        failureInfo.put("error", (String) itemResult.get("error"));
+	                        failureInfo.put("errorType", (String) itemResult.get("errorType"));
+	                        failedExports.add(failureInfo);
+	                        processingLog.setFailureCount(failedExports.size());
+	                    }else if ("skipped".equals(status)) {
+	                        skippedCount++;
+	                    }
+	                    
+	                    processed++;
+	                    	                    
+	                 // 使用專門的進度更新方法
+	                    if (processed % batchSize == 0 || processed == masterItemCodes.size()) {
+	                        processingLog = updateProcessingProgress(
+	                            processingLog, 
+	                            processed,
+	                            successfulExports.size(), 
+	                            failedExports.size(),
+	                            skippedCount
+	                        );
+	                        
+	                        // 保存檢查點
+	                        saveCheckpoint(processingLog, successfulExports, failedExports, itemCode);
+	                        
+	                        knowledgeBaseRepository.flush();
+	                        
+	                        logger.info("=== Progress: {}/{} items processed ({} success, {} failed, {} skipped) ===", 
+	                            processed, masterItemCodes.size(), 
+	                            successfulExports.size(), failedExports.size(), skippedCount);
+	                    }
+	                } else {
+	                    logger.warn("Timeout waiting for task completion");
+	                    processed++;
+	                }
+	                
+	            } catch (Exception e) {
+	                logger.error("Error processing batch item", e);
+	                processed++;
+	            }
+	        }
+	     // 關閉執行器
+	        batchExecutor.shutdown();
+	        if (!batchExecutor.awaitTermination(10, TimeUnit.MINUTES)) {
+	            batchExecutor.shutdownNow();
+	        }
+	        
+	     // 檢查最終狀態
+	        ProcessingLog finalLog = processingLogRepository.findByBatchId(batchId).orElse(processingLog);
+	        if (finalLog.getStatus() == ProcessingLog.ProcessingStatus.PROCESSING) {
+	            // 正常完成
+	            finalLog.setEndTime(LocalDateTime.now());
+	            finalLog.setStatus(ProcessingLog.ProcessingStatus.COMPLETED);
+	            saveProcessingLog(finalLog);
+	        }
+			
 			// 生成合併的完整知識庫檔案 Generate master knowledge base file
 			// Generate master knowledge base file
-	        String masterFileName = null;
-	        try {
-	            masterFileName = generateMasterKnowledgeBaseFile(format);
-	            logger.info("Generated master knowledge base file: {}", masterFileName);
-	        } catch (Exception e) {
-	            logger.error("Failed to generate master knowledge base file", e);
-	        }
+			String masterFileName = null;
+			try {
+				masterFileName = generateMasterKnowledgeBaseFile(format);
+				logger.info("Generated master knowledge base file: {}", masterFileName);
+			} catch (Exception e) {
+				logger.error("Failed to generate master knowledge base file", e);
+			}
 
-	        // Prepare detailed results
-			result.put("totalItems", masterItemCodes.size());
-			result.put("successfulExports", successfulExports);
-			result.put("failedExports", failedExports);
-			result.put("successCount", successfulExports.size());
-			result.put("failureCount", failedExports.size());
-			result.put("masterKnowledgeBaseFile", masterFileName);
+			// 準備詳細結果
+	        result = buildExportResult(
+	            masterItemCodes.size(), 
+	            successfulExports, 
+	            failedExports, 
+	            skippedCount,
+	            finalLog,
+	            masterFileName
+	        );
+			
+			
+			logger.info("=== Batch export completed ===");
+			logger.info("Success: {}, Failed: {}, Skipped: {}, Time: {} seconds", 
+	                successfulExports.size(), failedExports.size(), skippedCount, 
+	                result.get("processingTimeSeconds"));
 
-			// Add hydraulic cylinder specific statistics
-			long hydraulicCylinderCount = successfulExports.stream()
-					.filter(this::isHydraulicCylinderItem)
-		            .count();
-			result.put("hydraulicCylinderCount", hydraulicCylinderCount);
-
-			// Add summary
-	        result.put("summary", String.format(
-	            "Batch export completed: %d/%d successful (%.1f%%), %d hydraulic cylinders",
-	            successfulExports.size(), masterItemCodes.size(),
-	            (double) successfulExports.size() / masterItemCodes.size() * 100,
-	            hydraulicCylinderCount
-	        ));
-	        
-	        logger.info("=== Batch export completed ===");
-	        logger.info("Success: {}, Failed: {}", successfulExports.size(), failedExports.size());
-	        
-	        if (!failedExports.isEmpty()) {
-	            logger.error("Failed items details:");
-	            failedExports.forEach(failure -> 
-	                logger.error("  - {}: {}", failure.get("itemCode"), failure.get("error"))
-	            );
-	        }
+			
 		} catch (Exception e) {
 			logger.error("Critical error during batch export", e);
-	        result.put("criticalError", e.getMessage());
-	        throw new RuntimeException("Batch export failed: " + e.getMessage(), e);
+			processingLog.setStatus(ProcessingLog.ProcessingStatus.FAILED);
+	        processingLog.setErrorDetails(e.getMessage());
+	        processingLog.setEndTime(LocalDateTime.now());
+	        saveProcessingLog(processingLog);
+	        
+			result.put("criticalError", e.getMessage());
+			throw new RuntimeException("Batch export failed: " + e.getMessage(), e);
 		}
 
 		return result;
@@ -404,33 +568,58 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 			// 從知識庫中查詢活躍的OWL檔案
 			List<OWLKnowledgeBase> activeKnowledgeBases = knowledgeBaseRepository.findByActiveTrue();
 
+			// Use parallel processing for similarity calculation
+			List<Future<Map<String, Object>>> futures = new ArrayList<>();
+			ExecutorService searchExecutor = Executors.newFixedThreadPool(4);
+
 			for (OWLKnowledgeBase kb : activeKnowledgeBases) {
-				try {
-					OntModel model = getKnowledgeBaseModel(kb.getMasterItemCode());
-					if (model != null) {
-						double similarity = calculateSimilarityScore(model, specifications, kb);
+				Future<Map<String, Object>> future = searchExecutor.submit(() -> {
+					try {
+						OntModel model = getKnowledgeBaseModel(kb.getMasterItemCode());
+						if (model != null) {
+							double similarity = calculateSimilarityScore(model, specifications, kb);
 
-						if (similarity > 0.3) { // 30%以上相似度
-							Map<String, Object> similarBOM = new HashMap<>();
-							similarBOM.put("masterItemCode", kb.getMasterItemCode());
-							similarBOM.put("fileName", kb.getFileName());
-							similarBOM.put("description", kb.getDescription());
-							similarBOM.put("similarityScore", Math.round(similarity * 100.0) / 100.0);
-							similarBOM.put("createdAt", kb.getCreatedAt());
-							similarBOM.put("tripleCount", kb.getTripleCount());
-							similarBOM.put("isHydraulicCylinder", kb.getIsHydraulicCylinder());
+							if (similarity > 0.3) { // 30%以上相似度
+								Map<String, Object> similarBOM = new HashMap<>();
+								similarBOM.put("masterItemCode", kb.getMasterItemCode());
+								similarBOM.put("fileName", kb.getFileName());
+								similarBOM.put("description", kb.getDescription());
+								similarBOM.put("similarityScore", Math.round(similarity * 100.0) / 100.0);
+								similarBOM.put("createdAt", kb.getCreatedAt());
+								similarBOM.put("tripleCount", kb.getTripleCount());
+								similarBOM.put("isHydraulicCylinder", kb.getIsHydraulicCylinder());
 
-							if (kb.getIsHydraulicCylinder() != null && kb.getIsHydraulicCylinder()) {
-								similarBOM.put("hydraulicCylinderSpecs", kb.getHydraulicCylinderSpecs());
+								if (kb.getIsHydraulicCylinder() != null && kb.getIsHydraulicCylinder()) {
+									similarBOM.put("hydraulicCylinderSpecs", kb.getHydraulicCylinderSpecs());
+								}
+
+								return similarBOM;
 							}
-
-							similarBOMs.add(similarBOM);
 						}
+					} catch (Exception e) {
+						logger.warn("Error processing knowledge base entry: {}", kb.getMasterItemCode(), e);
 					}
+					return null;
+				});
+
+				futures.add(future);
+			}
+
+			// Collect results with timeout
+			for (Future<Map<String, Object>> future : futures) {
+				try {
+					Map<String, Object> result = future.get(5, TimeUnit.SECONDS);
+					if (result != null) {
+						similarBOMs.add(result);
+					}
+				} catch (TimeoutException e) {
+					logger.warn("Timeout calculating similarity for a BOM");
 				} catch (Exception e) {
-					logger.warn("Error processing knowledge base entry: {}", kb.getMasterItemCode(), e);
+					logger.warn("Error getting similarity result", e);
 				}
 			}
+
+			searchExecutor.shutdown();
 
 			// 按相似度排序
 			similarBOMs.sort(
@@ -531,13 +720,32 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		Map<String, Object> stats = new HashMap<>();
 
 		try {
-			long totalEntries = knowledgeBaseRepository.countByActiveTrue();
-			long totalFileSize = knowledgeBaseRepository.sumFileSizeByActiveTrue();
-			long totalTriples = knowledgeBaseRepository.sumTripleCountByActiveTrue();
-			long hydraulicCylinderCount = knowledgeBaseRepository.countByActiveTrueAndIsHydraulicCylinderTrue();
+			// 修復空值問題 - 使用安全的空值處理
+			Long totalEntriesLong = knowledgeBaseRepository.countByActiveTrue();
+			long totalEntries = totalEntriesLong != null ? totalEntriesLong : 0L;
 
-			Map<String, Long> formatDistribution = knowledgeBaseRepository.countByFormatAndActiveTrue();
+			Long totalFileSizeLong = knowledgeBaseRepository.sumFileSizeByActiveTrue();
+			long totalFileSize = totalFileSizeLong != null ? totalFileSizeLong : 0L;
 
+			Long totalTriplesLong = knowledgeBaseRepository.sumTripleCountByActiveTrue();
+			long totalTriples = totalTriplesLong != null ? totalTriplesLong : 0L;
+
+			Long hydraulicCylinderCountLong = knowledgeBaseRepository.countByActiveTrueAndIsHydraulicCylinderTrue();
+			long hydraulicCylinderCount = hydraulicCylinderCountLong != null ? hydraulicCylinderCountLong : 0L;
+
+			// 獲取格式分佈（這個方法可能需要額外檢查）
+			Map<String, Long> formatDistribution;
+			try {
+				formatDistribution = knowledgeBaseRepository.countByFormatAndActiveTrue();
+				if (formatDistribution == null) {
+					formatDistribution = new HashMap<>();
+				}
+			} catch (Exception e) {
+				logger.warn("Error getting format distribution: {}", e.getMessage());
+				formatDistribution = new HashMap<>();
+			}
+
+			// 設置統計值
 			stats.put("totalEntries", totalEntries);
 			stats.put("totalFileSize", totalFileSize);
 			stats.put("totalTriples", totalTriples);
@@ -546,14 +754,43 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 			stats.put("cacheSize", modelCache.size());
 			stats.put("lastMasterUpdate", lastMasterUpdate);
 
-			// Calculate percentages
+			// 計算百分比 - 避免除零錯誤
 			if (totalEntries > 0) {
 				double hydraulicCylinderPercentage = (double) hydraulicCylinderCount / totalEntries * 100;
 				stats.put("hydraulicCylinderPercentage", Math.round(hydraulicCylinderPercentage * 100.0) / 100.0);
+
+				// 計算平均文件大小
+				double avgFileSize = (double) totalFileSize / totalEntries;
+				stats.put("averageFileSize", Math.round(avgFileSize * 100.0) / 100.0);
+			} else {
+				stats.put("hydraulicCylinderPercentage", 0.0);
+				stats.put("averageFileSize", 0.0);
 			}
+
+			// 添加狀態信息
+			stats.put("status", "SUCCESS");
+			stats.put("timestamp", LocalDateTime.now());
+
+			logger.debug("Knowledge base statistics calculated successfully");
 
 		} catch (Exception e) {
 			logger.error("Error getting knowledge base statistics", e);
+
+			// 返回錯誤狀態而不是拋出異常
+			stats.put("status", "ERROR");
+			stats.put("error", e.getMessage());
+			stats.put("errorType", e.getClass().getSimpleName());
+			stats.put("timestamp", LocalDateTime.now());
+
+			// 設置默認值
+			stats.put("totalEntries", 0L);
+			stats.put("totalFileSize", 0L);
+			stats.put("totalTriples", 0L);
+			stats.put("hydraulicCylinderCount", 0L);
+			stats.put("formatDistribution", new HashMap<>());
+			stats.put("cacheSize", modelCache.size());
+			stats.put("hydraulicCylinderPercentage", 0.0);
+			stats.put("averageFileSize", 0.0);
 		}
 
 		return stats;
@@ -650,43 +887,189 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 	}
 
 	private void updateMasterKnowledgeBase() {
-		logger.info("Updating master knowledge base");
-
+		logger.info("=== Starting updateMasterKnowledgeBase ===");
 		try {
+			// 初始化主知識庫模型
+			logger.debug("Creating new ontology model");
 			masterKnowledgeBase = ModelFactory.createOntologyModel(OntModelSpec.OWL_DL_MEM);
+			logger.debug("Ontology model created successfully");
 
 			// Add hydraulic cylinder ontology as base
+			logger.debug("Attempting to add hydraulic cylinder ontology");
 			try {
-				masterKnowledgeBase.add(hydraulicCylinderOntology.getOntologyModel());
-				logger.debug("Added hydraulic cylinder ontology to master knowledge base");
-			} catch (Exception e) {
-				logger.warn("Failed to add hydraulic cylinder ontology to master: {}", e.getMessage());
+				if (hydraulicCylinderOntology == null) {
+					logger.warn("HydraulicCylinderOntology service is null");
+				} else {
+					logger.debug("Getting ontology model from hydraulicCylinderOntology");
+					OntModel cylinderModel = null;
+
+					try {
+						// 添加超時保護
+						long startTime = System.currentTimeMillis();
+						cylinderModel = hydraulicCylinderOntology.getOntologyModel();
+						long endTime = System.currentTimeMillis();
+						logger.debug("Got ontology model in {} ms", endTime - startTime);
+					} catch (Exception e) {
+						logger.error("Exception getting ontology model", e);
+						throw e;
+					}
+
+					if (cylinderModel == null) {
+						logger.warn("Hydraulic cylinder ontology model is null");
+					} else {
+						logger.debug("Adding cylinder model to master KB");
+						masterKnowledgeBase.add(cylinderModel);
+						logger.info("Successfully added hydraulic cylinder ontology to master knowledge base");
+					}
+				}
+			} catch (Throwable t) { // 捕獲所有可能的錯誤，包括 Error
+				logger.error("Critical error adding hydraulic cylinder ontology", t);
+				logger.error("Error type: {}", t.getClass().getName());
+				logger.error("Error message: {}", t.getMessage());
+				// 繼續執行，不要因為這個錯誤而停止
 			}
+			logger.info("Continuing with knowledge base update...");
 
 			// 合併所有活躍的知識庫條目
-			List<OWLKnowledgeBase> activeEntries = knowledgeBaseRepository.findByActiveTrue();
+			logger.info("Fetching active knowledge base entries");
+			List<OWLKnowledgeBase> activeEntries = null; // knowledgeBaseRepository.findByActiveTrue();
+
+			try {
+				activeEntries = knowledgeBaseRepository.findByActiveTrue();
+				logger.info("Found {} active entries to process", activeEntries != null ? activeEntries.size() : 0);
+			} catch (Exception e) {
+				logger.error("Error fetching active entries from repository", e);
+				activeEntries = new ArrayList<>(); // Empty list to continue
+			}
+
+			if (activeEntries == null || activeEntries.isEmpty()) {
+				logger.warn("No active entries found in knowledge base");
+				// Still save an empty master file
+				saveMasterKnowledgeBaseFile();
+				return;
+			}
+
+			int processed = 0;
+			int failed = 0;
+
+			// Use parallel stream with timeout protection
+			List<Future<Boolean>> futures = new ArrayList<>();
+			ExecutorService updateExecutor = Executors.newFixedThreadPool(4);
 
 			for (OWLKnowledgeBase entry : activeEntries) {
+				Future<Boolean> future = updateExecutor.submit(() -> {
+					try {
+						// Check if file exists
+						File file = new File(entry.getFilePath());
+						if (!file.exists()) {
+							logger.warn("File not found for entry {}: {}", entry.getMasterItemCode(),
+									entry.getFilePath());
+							return false;
+						}
+
+						// Load and add model
+						OntModel model = loadOWLModelWithTimeout(entry.getFilePath(), 5);
+						if (model != null) {
+							synchronized (masterKnowledgeBase) {
+								masterKnowledgeBase.add(model);
+							}
+							return true;
+						} else {
+							logger.warn("Failed to load model for entry: {}", entry.getMasterItemCode());
+							return false;
+						}
+					} catch (Exception e) {
+						logger.error("Error processing entry {}: {}", entry.getMasterItemCode(), e.getMessage());
+						return false;
+					}
+				});
+
+				futures.add(future);
+			}
+
+			// Wait for all futures to complete
+			for (Future<Boolean> future : futures) {
 				try {
-					OntModel model = loadOWLModel(entry.getFilePath());
-					masterKnowledgeBase.add(model);
+					Boolean success = future.get(10, TimeUnit.SECONDS);
+					if (success) {
+						processed++;
+					} else {
+						failed++;
+					}
+
+					// 每處理 10 個就記錄一次
+					if ((processed + failed) % 10 == 0) {
+						logger.info("Progress: {}/{} entries processed successfully, {} failed", processed,
+								activeEntries.size(), failed);
+					}
+				} catch (TimeoutException e) {
+					logger.error("Timeout processing entry");
+					failed++;
 				} catch (Exception e) {
-					logger.warn("Error adding model to master knowledge base: {}", entry.getFilePath(), e);
+					logger.error("Error getting future result", e);
+					failed++;
 				}
 			}
 
-			lastMasterUpdate = LocalDateTime.now();
+			updateExecutor.shutdown();
 
-			// 保存合併後的主知識庫檔案
+			logger.info("Processing complete: {} successful, {} failed out of {} total entries", processed, failed,
+					activeEntries.size());
+
+			// Save master knowledge base file
+			saveMasterKnowledgeBaseFile();
+
+			logger.info("=== updateMasterKnowledgeBase completed successfully ===");
+		} catch (Exception e) {
+			logger.error("=== CRITICAL ERROR in updateMasterKnowledgeBase ===", e);
+			e.printStackTrace(); // 確保堆疊追蹤被輸出
+
+			// 嘗試設置一個空的模型以避免 null pointer
+			if (masterKnowledgeBase == null) {
+				try {
+					masterKnowledgeBase = ModelFactory.createOntologyModel(OntModelSpec.OWL_DL_MEM);
+					logger.info("Created empty master knowledge base as fallback");
+				} catch (Exception ex) {
+					logger.error("Failed to create fallback master knowledge base", ex);
+				}
+			}
+		}
+	}
+
+	private void saveMasterKnowledgeBaseFile() {
+		try {
 			String masterFilePath = Paths.get(knowledgeBasePath, "master_knowledge_base.owl").toString();
-			try (FileOutputStream fos = new FileOutputStream(masterFilePath)) {
-				masterKnowledgeBase.write(fos, "RDF/XML");
+			logger.info("Saving master knowledge base to: {}", masterFilePath);
+
+			// 確保目錄存在
+			File parentDir = new File(masterFilePath).getParentFile();
+			if (!parentDir.exists()) {
+				parentDir.mkdirs();
+				logger.debug("Created directory: {}", parentDir.getPath());
 			}
 
-			logger.info("Master knowledge base updated with {} models", activeEntries.size());
+			// 保存文件
+			try (FileOutputStream fos = new FileOutputStream(masterFilePath)) {
+				if (masterKnowledgeBase != null) {
+					masterKnowledgeBase.write(fos, "RDF/XML");
+					logger.info("Master knowledge base file saved successfully");
+
+					// 更新最後更新時間
+					lastMasterUpdate = LocalDateTime.now();
+
+					// 記錄文件大小
+					File savedFile = new File(masterFilePath);
+					if (savedFile.exists()) {
+						logger.info("Master file size: {} bytes", savedFile.length());
+					}
+				} else {
+					logger.error("Master knowledge base is null, cannot save");
+				}
+			}
 
 		} catch (Exception e) {
-			logger.error("Error updating master knowledge base", e);
+			logger.error("Error saving master knowledge base file", e);
+			throw new RuntimeException("Failed to save master knowledge base file", e);
 		}
 	}
 
@@ -744,7 +1127,20 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		try {
 			OntModel enhancedModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_DL_MEM);
 			enhancedModel.add(baseModel);
-			enhancedModel.add(hydraulicCylinderOntology.getOntologyModel());
+			// Get hydraulic cylinder ontology with timeout
+			Future<OntModel> future = executorService.submit(() -> hydraulicCylinderOntology.getOntologyModel());
+			
+			//enhancedModel.add(hydraulicCylinderOntology.getOntologyModel());
+			
+			try {
+				OntModel cylinderOntology = future.get(5, TimeUnit.SECONDS);
+				if (cylinderOntology != null) {
+					enhancedModel.add(cylinderOntology);
+				}
+			} catch (TimeoutException e) {
+				logger.warn("Timeout getting hydraulic cylinder ontology for enhancement");
+				future.cancel(true);
+			}
 
 			// Create hydraulic cylinder individual with specifications
 			Map<String, String> specs = extractSpecificationsFromCode(masterItemCode);
@@ -1234,7 +1630,7 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 
 		try {
 			// Search in multiple fields
-			String searchPattern = "%" + keyword.toLowerCase() + "%";
+			//String searchPattern = "%" + keyword.toLowerCase() + "%";
 
 			List<OWLKnowledgeBase> results = knowledgeBaseRepository.findAll().stream().filter(kb -> kb.getActive())
 					.filter(kb -> {
@@ -1432,5 +1828,550 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		logger.info("Found {} entries matching criteria", results.size());
 		return results;
 	}
+	
+	/**
+	 * Shutdown executor service gracefully
+	 */
+	@PreDestroy
+	public void shutdown() {
+		logger.info("Shutting down OWL Knowledge Base Service");
+		
+		try {
+			executorService.shutdown();
+			if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+				executorService.shutdownNow();
+			}
+		} catch (InterruptedException e) {
+			executorService.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
+		
+		// Clear cache
+		modelCache.clear();
+		
+		logger.info("OWL Knowledge Base Service shutdown complete");
+	}
+	/**
+	 * 檢查項目是否已處理過
+	 */
+	private boolean isAlreadyProcessed(String masterItemCode) {
+	    return knowledgeBaseRepository
+	        .findByMasterItemCodeAndActiveTrue(masterItemCode)
+	        .isPresent();
+	}
 
+	/**
+	 * 創建處理記錄
+	 */
+	private ProcessingLog createProcessingLog(String batchId) {
+		ProcessingLog log = ProcessingLog.builder()
+		        .batchId(batchId)
+		        .startTime(LocalDateTime.now())
+		        .status(ProcessingLog.ProcessingStatus.PROCESSING)
+		        .totalItems(0)  // 初始設為 0，稍後更新
+		        .processedItems(0)
+		        .successCount(0)
+		        .failureCount(0)
+		        .skippedCount(0)
+		        .totalFileSize(0L)
+		        .totalTripleCount(0L)
+		        .lastUpdateTime(LocalDateTime.now())
+		        .build();
+	    return log;
+	}
+
+	/**
+	 * 保存處理記錄
+	 */
+	private ProcessingLog saveProcessingLog(ProcessingLog log) {
+		log.setLastUpdateTime(LocalDateTime.now());
+	    return processingLogRepository.save(log);
+	}
+	
+	/**
+	 * 恢復批次匯出處理
+	 */
+	@Override
+	public Map<String, Object> resumeBatchExport(String batchId) {
+	    logger.info("=== Resuming batch export for batch ID: {} ===", batchId);
+	    
+	    Map<String, Object> result = new HashMap<>();
+	    
+	    try {
+	        // 1. 查找批次處理記錄
+	        ProcessingLog processingLog = processingLogRepository.findByBatchId(batchId)
+	            .orElseThrow(() -> new RuntimeException("Batch not found: " + batchId));
+	        
+	        // 2. 檢查是否可以恢復
+	        if (!processingLog.isResumable()) {
+	            throw new RuntimeException("Batch " + batchId + " is not resumable. Status: " + processingLog.getStatus());
+	        }
+	        
+	        // 3. 更新狀態為處理中
+	        processingLog.resume();
+	        processingLogRepository.save(processingLog);
+	        
+	        // 4. 獲取所有待處理項目
+	        List<String> masterItemCodes = bomOwlExportService.getAllMasterItemCodes("S", "130 HC");
+	        
+	        // 5. 確定從哪裡開始恢復
+	        String lastProcessedItemCode = processingLog.getLastProcessedItemCode();
+	        int startIndex = 0;
+	        if (lastProcessedItemCode != null && !lastProcessedItemCode.isEmpty()) {
+	            startIndex = masterItemCodes.indexOf(lastProcessedItemCode);
+	            if (startIndex >= 0) {
+	                startIndex++; // 從下一個開始
+	            } else {
+	                startIndex = processingLog.getProcessedItems();
+	            }
+	        } else {
+	            startIndex = processingLog.getProcessedItems();
+	        }
+	        
+	        logger.info("Resuming from index {} of {} items", startIndex, masterItemCodes.size());
+	        
+	        // 6. 獲取剩餘待處理項目
+	        List<String> remainingItems = masterItemCodes.subList(startIndex, masterItemCodes.size());
+	        
+	        // 7. 準備處理結果容器
+	        List<String> successfulExports = new ArrayList<>();
+	        List<Map<String, String>> failedExports = new ArrayList<>();
+	        
+	        // 從檢查點數據恢復已處理的統計
+	        if (processingLog.getCheckpointData() != null) {
+	            Map<String, Object> checkpoint = parseCheckpointData(processingLog.getCheckpointData());
+	            successfulExports.addAll((List<String>) checkpoint.getOrDefault("successfulExports", new ArrayList<>()));
+	            failedExports.addAll((List<Map<String, String>>) checkpoint.getOrDefault("failedExports", new ArrayList<>()));
+	        }
+	        
+	        // 8. 使用原有的批次處理邏輯
+	        int batchSize = 50;
+	        int threadPoolSize = 8;
+	        ExecutorService batchExecutor = Executors.newFixedThreadPool(threadPoolSize);
+	        CompletionService<Map<String, Object>> completionService = new ExecutorCompletionService<>(batchExecutor);
+	        
+	        final String format; // 從檢查點恢復或使用默認值
+	        final Boolean includeHierarchy; // 從檢查點恢復或使用默認值
+	        
+	        // 提取處理參數
+	        if (processingLog.getProcessingParameters() != null) {
+	            Map<String, Object> params = parseProcessingParameters(processingLog.getProcessingParameters());
+	            format = (String) params.getOrDefault("format", "RDF/XML");
+	            includeHierarchy = (Boolean) params.getOrDefault("includeHierarchy", true);
+	        }else {
+	        	format = "RDF/XML"; // 從檢查點恢復或使用默認值
+		        includeHierarchy = true; // 從檢查點恢復或使用默認值
+		        
+	        }
+	        
+	        // 9. 提交剩餘任務
+	        for (String masterItemCode : remainingItems) {
+	            completionService.submit(() -> {
+	                Map<String, Object> itemResult = new HashMap<>();
+	                itemResult.put("itemCode", masterItemCode);
+	                
+	                try {
+	                    // 檢查是否已存在
+	                    if (isAlreadyProcessed(masterItemCode)) {
+	                        logger.info("Item {} already processed, skipping", masterItemCode);
+	                        itemResult.put("status", "skipped");
+	                        return itemResult;
+	                    }
+	                    
+	                    exportAndSaveToKnowledgeBase(
+	                        masterItemCode, format, includeHierarchy,
+	                        "Resumed batch export - " + batchId);
+	                    
+	                    itemResult.put("status", "success");
+	                    logger.info("✓ Successfully exported: {}", masterItemCode);
+	                    
+	                } catch (Exception e) {
+	                    logger.error("✗ Failed to export item: {}", masterItemCode, e);
+	                    itemResult.put("status", "failed");
+	                    itemResult.put("error", e.getMessage());
+	                    itemResult.put("errorType", e.getClass().getSimpleName());
+	                }
+	                
+	                return itemResult;
+	            });
+	        }
+	        
+	        // 10. 處理完成的任務
+	        int processed = processingLog.getProcessedItems();
+	        int totalToProcess = remainingItems.size();
+	        int currentBatchProcessed = 0;
+	        
+	        while (currentBatchProcessed < totalToProcess) {
+	            try {
+	                Future<Map<String, Object>> future = completionService.poll(2, TimeUnit.MINUTES);
+	                
+	                if (future != null) {
+	                    Map<String, Object> itemResult = future.get();
+	                    String itemCode = (String) itemResult.get("itemCode");
+	                    String status = (String) itemResult.get("status");
+	                    
+	                    if ("success".equals(status)) {
+	                        successfulExports.add(itemCode);
+	                        processingLog.setSuccessCount(processingLog.getSuccessCount() + 1);
+	                    } else if ("failed".equals(status)) {
+	                        Map<String, String> failureInfo = new HashMap<>();
+	                        failureInfo.put("itemCode", itemCode);
+	                        failureInfo.put("error", (String) itemResult.get("error"));
+	                        failureInfo.put("errorType", (String) itemResult.get("errorType"));
+	                        failedExports.add(failureInfo);
+	                        processingLog.setFailureCount(processingLog.getFailureCount() + 1);
+	                    } else if ("skipped".equals(status)) {
+	                        processingLog.setSkippedCount(processingLog.getSkippedCount() + 1);
+	                    }
+	                    
+	                    processed++;
+	                    currentBatchProcessed++;
+	                    processingLog.setProcessedItems(processed);
+	                    processingLog.setLastProcessedItemCode(itemCode);
+	                    
+	                    // 定期保存進度
+	                    if (currentBatchProcessed % batchSize == 0 || currentBatchProcessed == totalToProcess) {
+	                        // 保存檢查點
+	                        Map<String, Object> checkpointData = new HashMap<>();
+	                        checkpointData.put("successfulExports", successfulExports);
+	                        checkpointData.put("failedExports", failedExports);
+	                        processingLog.setCheckpointData(convertToJson(checkpointData));
+	                        
+	                        processingLogRepository.save(processingLog);
+	                        knowledgeBaseRepository.flush();
+	                        
+	                        logger.info("=== Resume Progress: {}/{} items processed ({} success, {} failed) ===", 
+	                            processed, masterItemCodes.size(), 
+	                            processingLog.getSuccessCount(), processingLog.getFailureCount());
+	                    }
+	                } else {
+	                    logger.warn("Timeout waiting for task completion");
+	                    currentBatchProcessed++;
+	                }
+	                
+	            } catch (Exception e) {
+	                logger.error("Error processing batch item", e);
+	                currentBatchProcessed++;
+	            }
+	        }
+	        
+	        // 11. 關閉執行器
+	        batchExecutor.shutdown();
+	        if (!batchExecutor.awaitTermination(10, TimeUnit.MINUTES)) {
+	            batchExecutor.shutdownNow();
+	        }
+	        
+	        // 12. 標記批次完成
+	        if (processed >= masterItemCodes.size()) {
+	            processingLog.markCompleted();
+	        }
+	        processingLogRepository.save(processingLog);
+	        
+	        // 13. 準備返回結果
+	        result.put("batchId", batchId);
+	        result.put("totalItems", masterItemCodes.size());
+	        result.put("processedItems", processed);
+	        result.put("successCount", processingLog.getSuccessCount());
+	        result.put("failureCount", processingLog.getFailureCount());
+	        result.put("skippedCount", processingLog.getSkippedCount());
+	        result.put("status", processingLog.getStatus().toString());
+	        result.put("resumedFrom", startIndex);
+	        result.put("processedInThisRun", currentBatchProcessed);
+	        
+	        // 計算處理時間
+	        long duration = processingLog.getDurationSeconds();
+	        result.put("totalDurationSeconds", duration);
+	        
+	        result.put("summary", String.format(
+	            "Batch resume completed: %d items processed in this run, total %d/%d completed (%.1f%%)",
+	            currentBatchProcessed, processed, masterItemCodes.size(),
+	            (double) processed / masterItemCodes.size() * 100
+	        ));
+	        
+	        logger.info("=== Batch resume completed for batch ID: {} ===", batchId);
+	        
+	    } catch (Exception e) {
+	        logger.error("Error resuming batch export", e);
+	        
+	        // 更新批次狀態為失敗
+	        try {
+	            ProcessingLog processingLog = processingLogRepository.findByBatchId(batchId).orElse(null);
+	            if (processingLog != null) {
+	                processingLog.markFailed("Resume failed: " + e.getMessage());
+	                processingLogRepository.save(processingLog);
+	            }
+	        } catch (Exception ex) {
+	            logger.error("Error updating batch status", ex);
+	        }
+	        
+	        result.put("error", e.getMessage());
+	        throw new RuntimeException("Failed to resume batch export: " + e.getMessage(), e);
+	    }
+	    
+	    return result;
+	}
+
+	// 輔助方法：解析檢查點數據
+	private Map<String, Object> parseCheckpointData(String checkpointJson) {
+	    try {
+	        // 簡單的 JSON 解析（實際應用中應使用 Jackson 或 Gson）
+	        Map<String, Object> checkpoint = new HashMap<>();
+	        // 這裡應該實現 JSON 解析邏輯
+	        return checkpoint;
+	    } catch (Exception e) {
+	        logger.warn("Error parsing checkpoint data", e);
+	        return new HashMap<>();
+	    }
+	}
+
+	// 輔助方法：解析處理參數
+	private Map<String, Object> parseProcessingParameters(String parametersJson) {
+	    try {
+	        Map<String, Object> params = new HashMap<>();
+	        // 簡單的參數解析
+	        if (parametersJson != null && parametersJson.contains("format")) {
+	            // 這裡應該實現完整的 JSON 解析
+	            params.put("format", "RDF/XML");
+	            params.put("includeHierarchy", true);
+	        }
+	        return params;
+	    } catch (Exception e) {
+	        logger.warn("Error parsing processing parameters", e);
+	        return new HashMap<>();
+	    }
+	}
+
+	// 輔助方法：轉換為 JSON
+	private String convertToJson(Map<String, Object> data) {
+	    try {
+	        // 簡單的 JSON 轉換（實際應用中應使用 Jackson 或 Gson）
+	        StringBuilder json = new StringBuilder("{");
+	        boolean first = true;
+	        for (Map.Entry<String, Object> entry : data.entrySet()) {
+	            if (!first) json.append(",");
+	            json.append("\"").append(entry.getKey()).append("\":\"")
+	                .append(String.valueOf(entry.getValue())).append("\"");
+	            first = false;
+	        }
+	        json.append("}");
+	        return json.toString();
+	    } catch (Exception e) {
+	        logger.warn("Error converting to JSON", e);
+	        return "{}";
+	    }
+	}
+	
+	/**
+	 * 暫停批次處理
+	 */
+	@Override
+	public Map<String, Object> pauseBatchExport(String batchId) {
+	    logger.info("Pausing batch export for batch ID: {}", batchId);
+	    
+	    Map<String, Object> result = new HashMap<>();
+	    
+	    try {
+	        ProcessingLog processingLog = processingLogRepository.findByBatchId(batchId)
+	            .orElseThrow(() -> new RuntimeException("Batch not found: " + batchId));
+	        
+	        if (processingLog.getStatus() != ProcessingLog.ProcessingStatus.PROCESSING) {
+	            throw new RuntimeException("Cannot pause batch in status: " + processingLog.getStatus());
+	        }
+	        
+	        processingLog.pause();
+	        processingLogRepository.save(processingLog);
+	        
+	        result.put("batchId", batchId);
+	        result.put("status", "PAUSED");
+	        result.put("message", "Batch processing paused successfully");
+	        result.put("processedItems", processingLog.getProcessedItems());
+	        result.put("totalItems", processingLog.getTotalItems());
+	        
+	        // TODO: 實際上需要通知正在執行的線程停止處理
+	        // 這可能需要使用共享的標誌位或中斷機制
+	        
+	    } catch (Exception e) {
+	        logger.error("Error pausing batch", e);
+	        result.put("error", e.getMessage());
+	        throw new RuntimeException("Failed to pause batch: " + e.getMessage(), e);
+	    }
+	    
+	    return result;
+	}
+
+	/**
+	 * 取消批次處理
+	 */
+	@Override
+	public Map<String, Object> cancelBatchExport(String batchId) {
+	    logger.info("Cancelling batch export for batch ID: {}", batchId);
+	    
+	    Map<String, Object> result = new HashMap<>();
+	    
+	    try {
+	        ProcessingLog processingLog = processingLogRepository.findByBatchId(batchId)
+	            .orElseThrow(() -> new RuntimeException("Batch not found: " + batchId));
+	        
+	        if (processingLog.getStatus() == ProcessingLog.ProcessingStatus.COMPLETED) {
+	            throw new RuntimeException("Cannot cancel completed batch");
+	        }
+	        
+	        processingLog.setStatus(ProcessingLog.ProcessingStatus.CANCELLED);
+	        processingLog.setEndTime(LocalDateTime.now());
+	        processingLog.setNotes("Batch cancelled by user");
+	        processingLogRepository.save(processingLog);
+	        
+	        result.put("batchId", batchId);
+	        result.put("status", "CANCELLED");
+	        result.put("message", "Batch processing cancelled successfully");
+	        result.put("processedItems", processingLog.getProcessedItems());
+	        result.put("totalItems", processingLog.getTotalItems());
+	        
+	        // TODO: 實際上需要中斷正在執行的線程
+	        // 這可能需要保持對 ExecutorService 的引用
+	        
+	    } catch (Exception e) {
+	        logger.error("Error cancelling batch", e);
+	        result.put("error", e.getMessage());
+	        throw new RuntimeException("Failed to cancel batch: " + e.getMessage(), e);
+	    }
+	    
+	    return result;
+	}
+
+	// 為了支援批次控制，需要修改批次處理邏輯
+	// 在 exportAllBOMsToKnowledgeBase 方法中添加狀態檢查：
+
+	// 在處理循環中定期檢查批次狀態
+	private boolean shouldContinueProcessing(String batchId) {
+	    try {
+	        ProcessingLog log = processingLogRepository.findByBatchId(batchId).orElse(null);
+	        if (log == null) return false;
+	        
+	        ProcessingLog.ProcessingStatus status = log.getStatus();
+	        return status == ProcessingLog.ProcessingStatus.PROCESSING;
+	    } catch (Exception e) {
+	        logger.error("Error checking batch status", e);
+	        return false;
+	    }
+	}
+
+	// 在批次處理循環中使用：
+	// if (!shouldContinueProcessing(batchId)) {
+//	     logger.info("Batch processing interrupted for batch: {}", batchId);
+//	     break;
+	// }
+	
+	/**
+	 * 處理單個項目的匯出
+	 */
+	private Map<String, Object> processSingleItem(String masterItemCode, String format, 
+	                                             Boolean includeHierarchy, String batchId) {
+	    Map<String, Object> itemResult = new HashMap<>();
+	    itemResult.put("itemCode", masterItemCode);
+	    
+	    try {
+	        // 檢查是否已存在，避免重複處理
+	        if (isAlreadyProcessed(masterItemCode)) {
+	            logger.info("Item {} already processed, skipping", masterItemCode);
+	            itemResult.put("status", "skipped");
+	            return itemResult;
+	        }
+	        
+	        exportAndSaveToKnowledgeBase(
+	            masterItemCode, format, includeHierarchy,
+	            "Batch export from ERP system - " + batchId);
+	        
+	        itemResult.put("status", "success");
+	        logger.info("✓ Successfully exported: {}", masterItemCode);
+	        
+	    } catch (Exception e) {
+	        logger.error("✗ Failed to export item: {}", masterItemCode, e);
+	        itemResult.put("status", "failed");
+	        itemResult.put("error", e.getMessage());
+	        itemResult.put("errorType", e.getClass().getSimpleName());
+	    }
+	    
+	    return itemResult;
+	}
+	
+	/**
+	 * 更新處理進度的專門方法
+	 */
+	private ProcessingLog updateProcessingProgress(ProcessingLog log, int processed, 
+	                                              int success, int failed, int skipped) {
+	    log.setProcessedItems(processed);
+	    log.setSuccessCount(success);
+	    log.setFailureCount(failed);
+	    log.setSkippedCount(skipped);
+	    
+	    // 計算平均處理時間
+	    if (processed > 0) {
+	        long durationMs = java.time.Duration.between(log.getStartTime(), LocalDateTime.now()).toMillis();
+	        log.setAverageTimePerItem((double) durationMs / processed);
+	        
+	        // 估算完成時間
+	        if (log.getTotalItems() > processed) {
+	            long remainingItems = log.getTotalItems() - processed;
+	            long estimatedRemainingMs = (long) (log.getAverageTimePerItem() * remainingItems);
+	            log.setEstimatedCompletionTime(LocalDateTime.now().plusNanos(estimatedRemainingMs * 1_000_000));
+	        }
+	    }
+	    
+	    return saveProcessingLog(log);
+	}
+
+	/**
+	 * 保存檢查點數據
+	 */
+	private void saveCheckpoint(ProcessingLog log, List<String> successfulExports, 
+	                           List<Map<String, String>> failedExports, String lastItemCode) {
+	    Map<String, Object> checkpointData = new HashMap<>();
+	    checkpointData.put("successfulExports", successfulExports);
+	    checkpointData.put("failedExports", failedExports);
+	    checkpointData.put("lastProcessedTime", LocalDateTime.now().toString());
+	    
+	    log.setCheckpointData(convertToJson(checkpointData));
+	    log.setLastProcessedItemCode(lastItemCode);
+	    saveProcessingLog(log);
+	}
+	
+	/**
+	 * 構建匯出結果
+	 */
+	private Map<String, Object> buildExportResult(int totalItems, List<String> successfulExports,
+	                                             List<Map<String, String>> failedExports, int skippedCount,
+	                                             ProcessingLog processingLog, String masterFileName) {
+	    Map<String, Object> result = new HashMap<>();
+	    
+	    result.put("batchId", processingLog.getBatchId());
+	    result.put("totalItems", totalItems);
+	    result.put("successfulExports", successfulExports);
+	    result.put("failedExports", failedExports);
+	    result.put("successCount", successfulExports.size());
+	    result.put("failureCount", failedExports.size());
+	    result.put("skippedCount", skippedCount);
+	    result.put("masterKnowledgeBaseFile", masterFileName);
+	    
+	    // 計算處理時間
+	    long duration = processingLog.getDurationSeconds();
+	    result.put("processingTimeSeconds", duration);
+	    result.put("averageTimePerItem", 
+	        duration > 0 && totalItems > 0 ? duration / (double) totalItems : 0);
+	    
+	    // 添加液壓缸統計
+	    long hydraulicCylinderCount = successfulExports.stream()
+	            .filter(this::isHydraulicCylinderItem)
+	            .count();
+	    result.put("hydraulicCylinderCount", hydraulicCylinderCount);
+	    
+	    // 添加摘要
+	    result.put("summary",
+	            String.format("Batch export completed in %d seconds: %d/%d successful (%.1f%%), %d skipped, %d hydraulic cylinders",
+	                    duration, successfulExports.size(), totalItems,
+	                    totalItems > 0 ? (double) successfulExports.size() / totalItems * 100 : 0, 
+	                    skippedCount, hydraulicCylinderCount));
+	    
+	    return result;
+	}
 }

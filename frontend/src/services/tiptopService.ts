@@ -81,7 +81,7 @@ export const tiptopService = {
     // Get all materials
     getAllMaterials: async (): Promise<ImaFile[]> => {
         try {
-            const response = await tiptopApi.get<ApiResponse<ImaFile[]>>('/materials');
+            const response = await tiptopApi.get<ApiResponse<ImaFile[]>>('/bom/materials');
             if (!response.data.success) {
                 throw new Error(response.data.message || 'Failed to retrieve materials');
             }
@@ -95,7 +95,7 @@ export const tiptopService = {
     // Search materials by query
     searchMaterials: async (query: string): Promise<ImaFile[]> => {
         try {
-            const response = await tiptopApi.get<ApiResponse<ImaFile[]>>('/materials/search', {
+            const response = await tiptopApi.get<ApiResponse<ImaFile[]>>('/bom/materials/search', {
                 params: { query }
             });
             if (!response.data.success) {
@@ -111,7 +111,7 @@ export const tiptopService = {
     // Search materials by product type and line
     searchByProductTypeAndLine: async (type?: string, line?: string): Promise<ImaFile[]> => {
         try {
-            const response = await tiptopApi.get<ApiResponse<ImaFile[]>>('/materials/product', {
+            const response = await tiptopApi.get<ApiResponse<ImaFile[]>>('/bom/materials/product', {
                 params: { type, line }
             });
             
@@ -133,7 +133,7 @@ export const tiptopService = {
         spec?: string;
     }): Promise<ImaFile[]> => {
         try {
-            const response = await tiptopApi.post<ApiResponse<ImaFile[]>>('/items/search', params);
+            const response = await tiptopApi.post<ApiResponse<ImaFile[]>>('/bom/items/search', params);
             if (!response.data.success) {
                 throw new Error(response.data.message || 'Failed to search items');
             }

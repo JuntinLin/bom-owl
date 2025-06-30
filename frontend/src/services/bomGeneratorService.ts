@@ -4,6 +4,7 @@ import axios, { AxiosError } from 'axios';
 import axiosRetry from 'axios-retry';
 import createAxiosWithInterceptors from '@/utils/axiosInterceptor';
 import { ApiResponse } from '@/types/tiptop';
+import { SimilarBOM } from './knowledgeBaseService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/owl';
 const BASE_URL = '/bom-generator';
@@ -21,18 +22,44 @@ export interface CylinderSpecifications {
   bore: string;
   stroke: string;
   rodEndType: string;
+  installationType?: string;
+  shaftEndJoin?: string;
 }
 
 export interface ComponentOption {
   code: string;
   name: string;
+  description?: string;
   spec?: string;
+  quantity?: number;
+  compatibilityScore?: number;
+  recommendationLevel?: string;
 }
 
 export interface ComponentCategory {
   category: string;
+  categoryDisplayName?: string;
+  categoryDescription?: string;
   defaultQuantity: number;
   options: ComponentOption[];
+  isRequired?: boolean;
+  maxRecommendations?: number;
+  recommendedOption?: ComponentOption;
+  averageCompatibilityScore?: number;
+}
+
+export interface CylinderClassification {
+  boreSize?: string;
+  strokeLength?: string;
+  series?: string;
+  rodEndType?: string;
+}
+
+export interface ComponentStatistics {
+  totalComponents: number;
+  componentsByCategory?: Record<string, number>;
+  averageCompatibilityScore: number;
+  highConfidenceComponents: number;
 }
 
 export interface SimilarCylinder {
@@ -48,8 +75,20 @@ export interface GeneratedBom {
   itemName?: string;
   itemSpec?: string;
   specifications: CylinderSpecifications;
+  cylinderClassification?: CylinderClassification;
+  validationPassed?: boolean;
+  validationWarnings?: string[];
   componentCategories: ComponentCategory[];
   similarCylinders: SimilarCylinder[];
+  knowledgeBaseSuggestions?: SimilarBOM[];
+  overallRecommendationScore?: number;
+  componentStatistics?: ComponentStatistics;
+  generationMetadata?: {
+    generatedAt: number;
+    totalComponents: number;
+    totalCategories: number;
+  };
+  defaultQuantities?: Record<string, number>;
 }
 
 export interface CodeValidationResult {
@@ -212,6 +251,34 @@ export const bomGeneratorService = {
         throw new Error(response.data.message || 'Failed to validate cylinder code');
       }
       return response.data.data;
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Save a generated BOM to the knowledge base
+   * 
+   * @param bomStructure The generated BOM structure to save
+   * @param description Description for the knowledge base entry
+   * @returns Promise indicating success
+   */
+  saveGeneratedBomToKnowledgeBase: async (
+    bomStructure: GeneratedBom, 
+    description?: string
+  ): Promise<void> => {
+    try {
+      const response = await bomGeneratorApi.post<ApiResponse<any>>(
+        `${BASE_URL}/save-to-knowledge-base`,
+        {
+          bomStructure,
+          description: description || `Generated BOM for ${bomStructure.masterItemCode}`
+        }
+      );
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to save BOM to knowledge base');
+      }
     } catch (error) {
       handleApiError(error);
       throw error;

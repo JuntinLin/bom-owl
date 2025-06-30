@@ -1,5 +1,5 @@
 // src/pages/ExportPage.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { tiptopService } from '@/services/tiptopService';
 import { ImaFile, OntologyExportFormat } from '@/types/tiptop';
@@ -18,7 +18,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { ArrowDownToLine, Search, FileDown, Database, FolderTree, Layers } from 'lucide-react';
+import { ArrowDownToLine, Search, FileDown, Database, FolderTree, Layers, CheckCircle  } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const ExportPage = () => {
@@ -29,26 +29,61 @@ const ExportPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<ImaFile[]>([]);
   const [selectedItem, setSelectedItem] = useState<string>(initialMasterItem);
+  const [selectedItemDetails, setSelectedItemDetails] = useState<ImaFile | null>(null);
   const [format, setFormat] = useState<string>(OntologyExportFormat.RDF_XML);
   const [exportType, setExportType] = useState<'single' | 'all'>('single');
   const [searching, setSearching] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [useSimpleExport, setUseSimpleExport] = useState(false);
+
+  const validateItemCode = useCallback(async (code: string) => {
+    if (!code.trim()) {
+      setSelectedItem('');
+      setSelectedItemDetails(null);
+      return;
+    }
+    
+    setValidating(true);
+    try {
+      const item = await tiptopService.getMaterialByCode(code);
+      setSelectedItem(code);
+      setSelectedItemDetails(item);
+      // Only show success toast for manual validation, not for initial load
+      if (code !== initialMasterItem) {
+        toast.success(`Item found: ${item.ima02}`);
+      }
+    } catch (err) {
+      console.error('Error validating item code:', err);
+      toast.error(`Item code "${code}" not found`);
+      setSelectedItem('');
+      setSelectedItemDetails(null);
+    } finally {
+      setValidating(false);
+    }
+  }, [initialMasterItem]);
 
   useEffect(() => {
     // If a master item was provided in the URL, set it as selected
     if (initialMasterItem) {
-      setSelectedItem(initialMasterItem);
+      //setSelectedItem(initialMasterItem);
+      validateItemCode(initialMasterItem);
     }
-  }, [initialMasterItem]);
+  }, [initialMasterItem, validateItemCode]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
 
   const handleItemInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMasterItem(e.target.value);
-    setSelectedItem(e.target.value);
+    const value = e.target.value;
+    setMasterItem(value);
+    
+    // Clear selection if input is empty
+    if (!value.trim()) {
+      setSelectedItem('');
+      setSelectedItemDetails(null);
+    }
   };
 
   const handleSearch = async () => {
@@ -58,6 +93,9 @@ const ExportPage = () => {
     try {
       const results = await tiptopService.searchMaterials(searchTerm);
       setSearchResults(results);
+      if (results.length === 0) {
+        toast.info('No items found matching your search');
+      }
     } catch (err) {
       console.error('Error searching items:', err);
       toast.error('Failed to search for items');
@@ -69,10 +107,21 @@ const ExportPage = () => {
   const handleSelectSearchResult = (item: ImaFile) => {
     setMasterItem(item.ima01);
     setSelectedItem(item.ima01);
+    setSelectedItemDetails(item);
     setSearchResults([]);
     setSearchTerm('');
+    toast.success(`Selected: ${item.ima02}`);
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>, action: 'search' | 'validate') => {
+    if (e.key === 'Enter') {
+      if (action === 'search') {
+        handleSearch();
+      } else {
+        validateItemCode(masterItem);
+      }
+    }
+  };
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -110,7 +159,7 @@ const ExportPage = () => {
   };
 
   return (
-    <div className="container mx-auto py-6">
+   <div className="container mx-auto py-6">
       <h1 className="text-2xl font-bold mb-6">OWL Ontology Export</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -130,6 +179,7 @@ const ExportPage = () => {
                     id="search"
                     value={searchTerm}
                     onChange={handleSearchChange}
+                    onKeyDown={(e) => handleKeyPress(e, 'search')}
                     placeholder="Enter item name or spec"
                     className="rounded-r-none"
                   />
@@ -138,20 +188,18 @@ const ExportPage = () => {
                     disabled={!searchTerm.trim() || searching}
                     className="rounded-l-none"
                     variant={'outline'}
-                    
                   >
-                    {searching ? <Spinner className="h-4 w-4 mr-2" /> : null}
-                    Search
+                    {searching ? <Spinner className="h-4 w-4" /> : <Search className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
 
               {searchResults.length > 0 && (
-                <div className="border rounded-md divide-y">
+                <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
                   {searchResults.map((item) => (
                     <div
                       key={item.ima01}
-                      className="p-3 hover:bg-gray-50 cursor-pointer"
+                      className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => handleSelectSearchResult(item)}
                     >
                       <div className="font-medium">{item.ima02}</div>
@@ -166,13 +214,37 @@ const ExportPage = () => {
 
               <div>
                 <Label htmlFor="itemCode">Item code</Label>
-                <Input
-                  id="itemCode"
-                  value={masterItem}
-                  onChange={handleItemInputChange}
-                  placeholder="Enter item code directly"
-                  className="mt-1"
-                />
+                <div className="flex mt-1">
+                  <Input
+                    id="itemCode"
+                    value={masterItem}
+                    onChange={handleItemInputChange}
+                    onKeyDown={(e) => handleKeyPress(e, 'validate')}
+                    onBlur={() => masterItem && validateItemCode(masterItem)}
+                    placeholder="Enter item code directly"
+                    className="rounded-r-none"
+                  />
+                  <Button
+                    onClick={() => validateItemCode(masterItem)}
+                    disabled={!masterItem.trim() || validating}
+                    className="rounded-l-none"
+                    variant={'outline'}
+                    size="sm"
+                  >
+                    {validating ? <Spinner className="h-4 w-4" /> : 'Validate'}
+                  </Button>
+                </div>
+                {selectedItem && selectedItemDetails && (
+                  <div className="flex items-start mt-2 p-2 bg-green-50 rounded-md">
+                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 mr-2 flex-shrink-0" />
+                    <div className="text-sm">
+                      <p className="text-green-800 font-medium">{selectedItemDetails.ima02}</p>
+                      {selectedItemDetails.ima021 && (
+                        <p className="text-green-600">{selectedItemDetails.ima021}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

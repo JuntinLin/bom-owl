@@ -1,0 +1,621 @@
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:j.0="http://www.jfc.com/tiptop/ontology#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+  <owl:Class rdf:about="http://www.jfc.com/tiptop/ontology#MasterItem">
+    <rdfs:subClassOf>
+      <owl:Class rdf:about="http://www.jfc.com/tiptop/ontology#Material"/>
+    </rdfs:subClassOf>
+  </owl:Class>
+  <owl:Class rdf:about="http://www.jfc.com/tiptop/ontology#Cylinder">
+    <rdfs:subClassOf rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+  </owl:Class>
+  <owl:Class rdf:about="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  <owl:Class rdf:about="http://www.jfc.com/tiptop/ontology#ComponentItem">
+    <rdfs:subClassOf rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+  </owl:Class>
+  <owl:ObjectProperty rdf:about="http://www.jfc.com/tiptop/ontology#hasComponentItem">
+    <rdfs:range rdf:resource="http://www.jfc.com/tiptop/ontology#ComponentItem"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:about="http://www.jfc.com/tiptop/ontology#isUsedIn">
+    <rdfs:range rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#ComponentItem"/>
+  </owl:ObjectProperty>
+  <owl:ObjectProperty rdf:about="http://www.jfc.com/tiptop/ontology#hasMasterItem">
+    <rdfs:range rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  </owl:ObjectProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#characteristicCode">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#bore">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#installation">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#itemSpec">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#quantity">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#decimal"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#itemName">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#stroke">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#accessories">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#type">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#itemCode">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#expiryDate">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#date"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#shaftEndJoin">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#series">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#effectiveDate">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#date"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#BillOfMaterial"/>
+  </owl:DatatypeProperty>
+  <owl:DatatypeProperty rdf:about="http://www.jfc.com/tiptop/ontology#rodeEndType">
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+    <rdfs:domain rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+  </owl:DatatypeProperty>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_190_11156053004000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >2</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2017-09-19</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11156053004000">
+        <j.0:isUsedIn>
+          <j.0:Material rdf:about="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000">
+            <j.0:stroke>0300</j.0:stroke>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <j.0:bore>063</j.0:bore>
+            <j.0:itemSpec>高壓柱型油缸/耐壓210</j.0:itemSpec>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemCode>3S32A063E-03000Y0000</j.0:itemCode>
+            <j.0:type>A</j.0:type>
+            <j.0:series>32</j.0:series>
+            <j.0:rodeEndType>0</j.0:rodeEndType>
+            <j.0:itemName>HCA-210-FA-63x300ST</j.0:itemName>
+            <j.0:installation>FA</j.0:installation>
+          </j.0:Material>
+        </j.0:isUsedIn>
+        <j.0:itemSpec>BRT-53x63x3t</j.0:itemSpec>
+        <j.0:itemName>背托環</j.0:itemName>
+        <j.0:itemCode>11156053004000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_80_1S20306332A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_1S20306332A0000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:characteristicCode> </j.0:characteristicCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+        <j.0:itemSpec>B63(175x106x24L)</j.0:itemSpec>
+        <j.0:itemName>HCJ_FA</j.0:itemName>
+        <j.0:itemCode>1S20306332A0000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_1S05606332A0000_10_00700650000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >48</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-08-24</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00700650000000">
+        <j.0:isUsedIn>
+          <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_1S05606332A0000">
+            <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemSpec>B63 (D61x48L)</j.0:itemSpec>
+            <j.0:itemName>HCJ_襯套</j.0:itemName>
+            <j.0:itemCode>1S05606332A0000</j.0:itemCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+          </j.0:ComponentItem>
+        </j.0:isUsedIn>
+        <j.0:isUsedIn>
+          <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_1S01106332A0000">
+            <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemSpec>B63 (D63x45L)</j.0:itemSpec>
+            <j.0:itemName>HCJ_活塞</j.0:itemName>
+            <j.0:itemCode>1S01106332A0000</j.0:itemCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+          </j.0:ComponentItem>
+        </j.0:isUsedIn>
+        <j.0:itemSpec>FCD45-D65</j.0:itemSpec>
+        <j.0:itemName>鑄鐵棒</j.0:itemName>
+        <j.0:itemCode>00700650000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S05606332A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_210_11074030150000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11074030150000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>M30xP1.5x41x15 鍍鎳</j.0:itemSpec>
+        <j.0:itemName>螺帽</j.0:itemName>
+        <j.0:itemCode>11074030150000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_1S00606332A0000_10_00081001000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >55</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-06-23</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00081001000000">
+        <j.0:isUsedIn>
+          <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_1S00606332A0000">
+            <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemSpec>B63 (口100x52L)</j.0:itemSpec>
+            <j.0:itemName>HCJ_後蓋</j.0:itemName>
+            <j.0:itemCode>1S00606332A0000</j.0:itemCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+          </j.0:ComponentItem>
+        </j.0:isUsedIn>
+        <j.0:isUsedIn>
+          <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_1S00106332A0000">
+            <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemSpec>B63 (口100x72L)</j.0:itemSpec>
+            <j.0:itemName>HCJ_前蓋</j.0:itemName>
+            <j.0:itemCode>1S00106332A0000</j.0:itemCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+          </j.0:ComponentItem>
+        </j.0:isUsedIn>
+        <j.0:characteristicCode> </j.0:characteristicCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+        <j.0:itemSpec>100x100 倒C4角</j.0:itemSpec>
+        <j.0:itemName>鐵條</j.0:itemName>
+        <j.0:itemCode>00081001000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S00606332A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_10_1S00106332A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S00106332A0000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_20_1S00606332A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S00606332A0000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_60_2S0610630300232A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >4</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_2S0610630300232A0000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:characteristicCode> </j.0:characteristicCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+        <j.0:itemSpec>M16x1.5x508L (23,26)</j.0:itemSpec>
+        <j.0:itemName>HCJ_固定柱(SCM440+QT)</j.0:itemName>
+        <j.0:itemCode>2S0610630300232A0000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_2S0230630300032A0000_10_00230630761100">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >375</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-08-05</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00230630761100">
+        <j.0:isUsedIn>
+          <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_2S0230630300032A0000">
+            <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemSpec>D63xD76x375L</j.0:itemSpec>
+            <j.0:itemName>HCJ_鋼管(無縫)</j.0:itemName>
+            <j.0:itemCode>2S0230630300032A0000</j.0:itemCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+          </j.0:ComponentItem>
+        </j.0:isUsedIn>
+        <j.0:itemSpec>D63xD76</j.0:itemSpec>
+        <j.0:itemName>無縫鋼管STKM13C</j.0:itemName>
+        <j.0:itemCode>00230630761100</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_2S0230630300032A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_00081001000000_10_00101050000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >0.0874</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-06-23</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00101050000000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_00081001000000"/>
+        <j.0:itemSpec>105T</j.0:itemSpec>
+        <j.0:itemName>鐵板SS400</j.0:itemName>
+        <j.0:itemCode>00101050000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_00081001000000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_130_11156045006000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11156045006000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>T-G-45</j.0:itemSpec>
+        <j.0:itemName>背托環</j.0:itemName>
+        <j.0:itemCode>11156045006000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_150_11156058006000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >2</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11156058006000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>T-G-58</j.0:itemSpec>
+        <j.0:itemName>背托環</j.0:itemName>
+        <j.0:itemCode>11156058006000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_1S01106332A0000_10_00700650000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >45</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-06-23</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_00700650000000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S01106332A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_50_2S0230630300032A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_2S0230630300032A0000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_2S0610630300232A0000_10_00460160000001">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >508</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2019-08-05</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00460160000001">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_2S0610630300232A0000"/>
+        <j.0:characteristicCode> </j.0:characteristicCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+        <j.0:itemSpec>D16</j.0:itemSpec>
+        <j.0:itemName>SCM440+QT(HRC 28~32)</j.0:itemName>
+        <j.0:itemCode>00460160000001</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_2S0610630300232A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_1S20306332A0000_10_00100280000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >4.392</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-07-25</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00100280000000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S20306332A0000"/>
+        <j.0:itemSpec>28T</j.0:itemSpec>
+        <j.0:itemName>鐵板SS400</j.0:itemName>
+        <j.0:itemCode>00100280000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S20306332A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_160_11153020001000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11153020001000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>BP-20</j.0:itemSpec>
+        <j.0:itemName>(P)-O型環</j.0:itemName>
+        <j.0:itemCode>11153020001000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_200_11026016150000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >4</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11026016150000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>M16xP1.5 鋼螺帽</j.0:itemSpec>
+        <j.0:itemName>螺帽</j.0:itemName>
+        <j.0:itemCode>11026016150000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_90_11038035000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11038035000000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>UA2-0035</j.0:itemSpec>
+        <j.0:itemName>防塵(UA2=LBH)</j.0:itemName>
+        <j.0:itemCode>11038035000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_1S00106332A0000_10_00081001000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >75</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-10-17</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_00081001000000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S00106332A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_2S0160630300132A0000_10_00160350150100">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >511</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2017-02-02</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00160350150100">
+        <j.0:isUsedIn>
+          <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_2S0160630300132A0000">
+            <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+            <j.0:characteristicCode> </j.0:characteristicCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#MasterItem"/>
+            <j.0:itemSpec>B63x300ST (D35x511L)</j.0:itemSpec>
+            <j.0:itemName>HCJ_軸心</j.0:itemName>
+            <j.0:itemCode>2S0160630300132A0000</j.0:itemCode>
+            <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+          </j.0:ComponentItem>
+        </j.0:isUsedIn>
+        <j.0:itemSpec>D35  S45C+f8公差+單邊鍍鉻0.015mm以上</j.0:itemSpec>
+        <j.0:itemName>軸心</j.0:itemName>
+        <j.0:itemCode>00160350150100</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_2S0160630300132A0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_110_11156035004000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2017-09-19</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11156035004000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>BUR-35x45x3t</j.0:itemSpec>
+        <j.0:itemName>背托環</j.0:itemName>
+        <j.0:itemCode>11156035004000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_180_11039053000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >2</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11039053000000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>UF1-0053</j.0:itemSpec>
+        <j.0:itemName>油封(UF1=USH)</j.0:itemName>
+        <j.0:itemCode>11039053000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_140_11154058001000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >2</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11154058001000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>BG-58</j.0:itemSpec>
+        <j.0:itemName>(G)-O型環</j.0:itemName>
+        <j.0:itemCode>11154058001000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_70_1S05606332A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S05606332A0000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_40_2S0160630300132A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_2S0160630300132A0000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_100_11039035001000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11039035001000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>UF1-0035</j.0:itemSpec>
+        <j.0:itemName>油封(UF1=USH)</j.0:itemName>
+        <j.0:itemCode>11039035001000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_120_11154045001000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_11154045001000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+        <j.0:itemSpec>BG-45</j.0:itemSpec>
+        <j.0:itemName>(G)-O型環</j.0:itemName>
+        <j.0:itemCode>11154045001000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_00460160000001_10_00460160000000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2020-03-12</j.0:effectiveDate>
+    <j.0:hasComponentItem>
+      <j.0:ComponentItem rdf:about="http://www.jfc.com/tiptop/ontology#Material_00460160000000">
+        <j.0:isUsedIn rdf:resource="http://www.jfc.com/tiptop/ontology#Material_00460160000001"/>
+        <j.0:itemSpec>D16</j.0:itemSpec>
+        <j.0:itemName>SCM440</j.0:itemName>
+        <j.0:itemCode>00460160000000</j.0:itemCode>
+        <rdf:type rdf:resource="http://www.jfc.com/tiptop/ontology#Material"/>
+      </j.0:ComponentItem>
+    </j.0:hasComponentItem>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_00460160000001"/>
+  </j.0:BillOfMaterial>
+  <j.0:BillOfMaterial rdf:about="http://www.jfc.com/tiptop/ontology#BOM_3S32A063E-03000Y0000_30_1S01106332A0000">
+    <j.0:characteristicCode>_</j.0:characteristicCode>
+    <j.0:quantity rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal"
+    >1</j.0:quantity>
+    <j.0:effectiveDate rdf:datatype="http://www.w3.org/2001/XMLSchema#date"
+    >2016-12-13</j.0:effectiveDate>
+    <j.0:hasComponentItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_1S01106332A0000"/>
+    <j.0:hasMasterItem rdf:resource="http://www.jfc.com/tiptop/ontology#Material_3S32A063E-03000Y0000"/>
+  </j.0:BillOfMaterial>
+</rdf:RDF>

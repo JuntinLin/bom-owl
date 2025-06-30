@@ -18,9 +18,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * OWL知識庫Repository介面
- * Enhanced OWL Knowledge Base Repository Interface
- * Now includes hydraulic cylinder specific methods and advanced analytics
+ * OWL知識庫Repository介面 Enhanced OWL Knowledge Base Repository Interface Now
+ * includes hydraulic cylinder specific methods and advanced analytics
  */
 @Repository
 public interface OWLKnowledgeBaseRepository extends JpaRepository<OWLKnowledgeBase, Long> {
@@ -53,24 +52,21 @@ public interface OWLKnowledgeBaseRepository extends JpaRepository<OWLKnowledgeBa
 	/**
 	 * Count active hydraulic cylinder entries
 	 */
+	@Query("SELECT COUNT(o) FROM OWLKnowledgeBase o WHERE o.active = true AND o.isHydraulicCylinder = true")
 	long countByActiveTrueAndIsHydraulicCylinderTrue();
 
 	/**
 	 * Find hydraulic cylinders by series
 	 */
-	@Query("SELECT kb FROM OWLKnowledgeBase kb WHERE kb.active = true " 
-			+ "AND kb.isHydraulicCylinder = true "
-			+ "AND kb.hydraulicCylinderSpecs LIKE CONCAT('%series=', :series, '%') " 
-			+ "ORDER BY kb.masterItemCode")
+	@Query("SELECT kb FROM OWLKnowledgeBase kb WHERE kb.active = true " + "AND kb.isHydraulicCylinder = true "
+			+ "AND kb.hydraulicCylinderSpecs LIKE CONCAT('%series=', :series, '%') " + "ORDER BY kb.masterItemCode")
 	List<OWLKnowledgeBase> findHydraulicCylindersBySeries(@Param("series") String series);
 
 	/**
 	 * Find hydraulic cylinders by specifications pattern
 	 */
-	@Query("SELECT kb FROM OWLKnowledgeBase kb WHERE kb.active = true " 
-			+ "AND kb.isHydraulicCylinder = true "
-			+ "AND kb.hydraulicCylinderSpecs LIKE %:specsPattern% " 
-			+ "ORDER BY kb.masterItemCode")
+	@Query("SELECT kb FROM OWLKnowledgeBase kb WHERE kb.active = true " + "AND kb.isHydraulicCylinder = true "
+			+ "AND kb.hydraulicCylinderSpecs LIKE %:specsPattern% " + "ORDER BY kb.masterItemCode")
 	List<OWLKnowledgeBase> findByHydraulicCylinderSpecsContaining(@Param("specsPattern") String specsPattern);
 
 	/**
@@ -89,16 +85,16 @@ public interface OWLKnowledgeBaseRepository extends JpaRepository<OWLKnowledgeBa
 	@Query("SELECT COUNT(kb) FROM OWLKnowledgeBase kb WHERE kb.active = true")
 	long countByActiveTrue();
 
-	@Query("SELECT SUM(kb.fileSize) FROM OWLKnowledgeBase kb WHERE kb.active = true")
+	@Query("SELECT COALESCE(SUM(kb.fileSize), 0) FROM OWLKnowledgeBase kb WHERE kb.active = true")
 	Long sumFileSizeByActiveTrue();
 
-	@Query("SELECT SUM(kb.tripleCount) FROM OWLKnowledgeBase kb WHERE kb.active = true")
+	@Query("SELECT COALESCE(SUM(kb.tripleCount), 0)  FROM OWLKnowledgeBase kb WHERE kb.active = true")
 	Long sumTripleCountByActiveTrue();
 
 	// 格式分佈統計
 	/**
-     * Get format distribution for active entries
-     */
+	 * Get format distribution for active entries
+	 */
 	@Query("SELECT kb.format as format, COUNT(kb) as count FROM OWLKnowledgeBase kb WHERE kb.active = true GROUP BY kb.format")
 	List<Object[]> getFormatDistribution();
 
@@ -107,12 +103,20 @@ public interface OWLKnowledgeBaseRepository extends JpaRepository<OWLKnowledgeBa
 	 * Convert format distribution to Map
 	 */
 	default Map<String, Long> countByFormatAndActiveTrue() {
-		List<Object[]> results = getFormatDistribution();
-		Map<String, Long> formatCounts = new HashMap<>();
-		for (Object[] result : results) {
-			formatCounts.put((String) result[0], (Long) result[1]);
+		try {
+			List<Object[]> results = getFormatDistribution();
+			Map<String, Long> distribution = new HashMap<>();
+			for (Object[] result : results) {
+				String format = (String) result[0];
+				Long count = (Long) result[1];
+				distribution.put(format != null ? format : "UNKNOWN", count != null ? count : 0L);
+			}
+
+			return distribution;
+		} catch (Exception e) {
+			// 如果查詢失敗，返回空 Map
+			return new HashMap<>();
 		}
-		return formatCounts;
 	}
 
 	/**
@@ -170,10 +174,8 @@ public interface OWLKnowledgeBaseRepository extends JpaRepository<OWLKnowledgeBa
 	 * Find entries by quality score range
 	 */
 	@Query("SELECT kb FROM OWLKnowledgeBase kb WHERE kb.active = true "
-			+ "AND kb.qualityScore BETWEEN :minScore AND :maxScore " 
-			+ "ORDER BY kb.qualityScore DESC")
-	List<OWLKnowledgeBase> findByQualityScoreRange(
-			@Param("minScore") double minScore,
+			+ "AND kb.qualityScore BETWEEN :minScore AND :maxScore " + "ORDER BY kb.qualityScore DESC")
+	List<OWLKnowledgeBase> findByQualityScoreRange(@Param("minScore") double minScore,
 			@Param("maxScore") double maxScore);
 
 	/**

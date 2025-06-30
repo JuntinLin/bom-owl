@@ -1103,14 +1103,25 @@ public class HydraulicCylinderOntology {
      * Get ontology model
      */
     public OntModel getOntologyModel() {
-    	lock.readLock().lock();
-        try {
-            if (!initialized) {
+    	// First check without lock to avoid unnecessary locking
+        if (initialized && ontModel != null) {
+            lock.readLock().lock();
+            try {
+                return ontModel;
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+        
+        // If not initialized, release read lock and get write lock
+        // to avoid deadlock when calling initializeHydraulicCylinderOntology
+        synchronized (this) {
+            // Double-check after acquiring synchronized block
+            if (!initialized || ontModel == null) {
+                logger.debug("Ontology not initialized, initializing now...");
                 initializeHydraulicCylinderOntology();
             }
             return ontModel;
-        } finally {
-            lock.readLock().unlock();
         }
     }
     

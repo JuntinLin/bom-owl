@@ -9,6 +9,10 @@ import {
   SimilarCylinder,
   CodeValidationResult
 } from '@/services/bomGeneratorService';
+import knowledgeBaseService, {
+  ExportRequest,
+  SimilarBOM
+} from '@/services/knowledgeBaseService';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +40,10 @@ import {
   List,
   BarChart3,
   Share2,
-  Layers
+  Layers,
+  Database,
+  Save,
+  Brain,
 } from 'lucide-react';
 
 interface ComponentSelectorProps {
@@ -54,12 +61,18 @@ const ComponentSelector = ({
   onChangeQuantity,
   quantity 
 }: ComponentSelectorProps) => {
+  const selectedComponent = category.options.find(opt => opt.code === selectedOption);
   return (
     <Card className="mb-4">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{category.category}</CardTitle>
-        <CardDescription>
-          Select a component for this category
+        <CardTitle className="text-lg flex items-center justify-between">
+          {category.categoryDisplayName || category.category}
+          {category.isRequired && (
+            <Badge variant="default" className="text-xs">Required</Badge>
+          )}
+        </CardTitle>
+         <CardDescription>
+          {category.categoryDescription || `Select a component for this category`}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -77,14 +90,39 @@ const ComponentSelector = ({
                 {category.options.map(option => (
                   <SelectItem key={option.code} value={option.code}>
                     <div className="flex flex-col">
-                      <span>{option.name}</span>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{option.name}</span>
+                        {option.compatibilityScore && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {(option.compatibilityScore * 100).toFixed(0)}% match
+                          </Badge>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-500">{option.code}</span>
+                      {option.spec && (
+                        <span className="text-xs text-gray-400">{option.spec}</span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+          
+          {selectedComponent && selectedComponent.recommendationLevel && (
+            <div className="p-2 bg-blue-50 rounded text-sm">
+              <span className="font-medium">Recommendation: </span>
+              <span className={`
+                ${selectedComponent.recommendationLevel === 'Highly Recommended' ? 'text-green-700' : ''}
+                ${selectedComponent.recommendationLevel === 'Recommended' ? 'text-blue-700' : ''}
+                ${selectedComponent.recommendationLevel === 'Consider' ? 'text-yellow-700' : ''}
+                ${selectedComponent.recommendationLevel === 'Alternative' ? 'text-gray-700' : ''}
+              `}>
+                {selectedComponent.recommendationLevel}
+              </span>
+            </div>
+          )}
+          
           <div>
             <Label htmlFor={`${category.category}-quantity`}>Quantity</Label>
             <Input
@@ -147,6 +185,48 @@ const SimilarCylinderCard = ({ cylinder, onUseAsReference }: SimilarCylinderCard
   );
 };
 
+interface KnowledgeBaseSuggestionCardProps {
+  suggestion: SimilarBOM;
+  onViewDetails: () => void;
+}
+
+const KnowledgeBaseSuggestionCard = ({ suggestion, onViewDetails }: KnowledgeBaseSuggestionCardProps) => {
+  return (
+    <Card className="border-l-4 border-l-green-500">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-lg">{suggestion.masterItemCode}</CardTitle>
+          <Badge variant="outline" className="bg-green-50">
+            <Brain className="h-3 w-3 mr-1" />
+            {suggestion.similarityScore}% Match
+          </Badge>
+        </div>
+        <CardDescription>
+          {suggestion.description || 'From Knowledge Base'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="text-sm space-y-1">
+          <div>
+            <span className="text-gray-500">File:</span> {suggestion.fileName}
+          </div>
+          <div>
+            <span className="text-gray-500">Triples:</span> {suggestion.tripleCount}
+          </div>
+          <div>
+            <span className="text-gray-500">Created:</span> {new Date(suggestion.createdAt).toLocaleDateString()}
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button variant="outline" size="sm" className="w-full" onClick={onViewDetails}>
+          View Details
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+};
+
 const BomGeneratorPage = () => {
   const [activeTab, setActiveTab] = useState('input');
   const [itemCode, setItemCode] = useState('');
@@ -156,11 +236,13 @@ const BomGeneratorPage = () => {
   const [codeValidation, setCodeValidation] = useState<CodeValidationResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSavingToKB, setIsSavingToKB] = useState(false);
   const [generatedBom, setGeneratedBom] = useState<GeneratedBom | null>(null);
   const [selectedComponents, setSelectedComponents] = useState<Record<string, string>>({});
   const [componentQuantities, setComponentQuantities] = useState<Record<string, number>>({});
   const [exportFormat, setExportFormat] = useState('JSONLD');
   const [error, setError] = useState<string | null>(null);
+  const [knowledgeBaseSuggestions, setKnowledgeBaseSuggestions] = useState<SimilarBOM[]>([]);
   
   const navigate = useNavigate();
 
@@ -221,6 +303,22 @@ const BomGeneratorPage = () => {
     setError(null);
     
     try {
+      // First, check if similar BOMs exist in knowledge base
+      const specifications = codeValidation.specifications;
+      // Convert CylinderSpecifications to Record<string, string>
+      const specsRecord: Record<string, string> = {
+        series: specifications.series,
+        type: specifications.type,
+        bore: specifications.bore,
+        stroke: specifications.stroke,
+        rodEndType: specifications.rodEndType,
+        ...(specifications.installationType && { installationType: specifications.installationType }),
+        ...(specifications.shaftEndJoin && { shaftEndJoin: specifications.shaftEndJoin })
+      };
+      const similarBOMs = await knowledgeBaseService.searchSimilarBOMs(specsRecord);
+      setKnowledgeBaseSuggestions(similarBOMs);
+
+      // Generate new BOM with knowledge base context      
       const newItemInfo: NewItemInfo = {
         itemCode,
         itemName,
@@ -228,6 +326,11 @@ const BomGeneratorPage = () => {
       };
       
       const result = await bomGeneratorService.generateNewBom(newItemInfo);
+      // Enhance the result with knowledge base suggestions
+      if (similarBOMs.length > 0) {
+        result.knowledgeBaseSuggestions = similarBOMs;
+        toast.info(`Found ${similarBOMs.length} similar BOMs in knowledge base`);
+      }
       setGeneratedBom(result);
       setActiveTab('components');
       
@@ -282,6 +385,29 @@ const BomGeneratorPage = () => {
     }
   };
 
+  const saveToKnowledgeBase = async () => {
+    if (!generatedBom) return;
+    
+    setIsSavingToKB(true);
+    
+    try {
+      const exportRequest: ExportRequest = {
+        masterItemCode: generatedBom.masterItemCode,
+        format: 'RDF/XML',
+        includeHierarchy: true,
+        description: `Generated BOM for ${generatedBom.itemName || generatedBom.masterItemCode} - ${new Date().toISOString()}`
+      };
+      
+      await knowledgeBaseService.exportSingleToKnowledgeBase(exportRequest);
+      toast.success('BOM saved to knowledge base successfully');
+      
+    } catch (err) {
+      toast.error('Failed to save BOM to knowledge base');
+    } finally {
+      setIsSavingToKB(false);
+    }
+  };
+
   const handleSelectComponent = (category: string, code: string) => {
     setSelectedComponents(prev => ({
       ...prev,
@@ -298,6 +424,10 @@ const BomGeneratorPage = () => {
 
   const handleUseAsReference = (cylinder: SimilarCylinder) => {
     navigate(`/items/view/${cylinder.code}`);
+  };
+
+  const handleViewKBDetails = (suggestion: SimilarBOM) => {
+    navigate(`/items/view/${suggestion.masterItemCode}`);
   };
 
   const getContentType = (format: string): string => {
@@ -346,7 +476,7 @@ const BomGeneratorPage = () => {
       )}
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-        <TabsList className="grid grid-cols-3 w-full">
+        <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="input">
             <Settings className="h-4 w-4 mr-2" />
             Input Specifications
@@ -358,6 +488,10 @@ const BomGeneratorPage = () => {
           <TabsTrigger value="similar" disabled={!generatedBom}>
             <BarChart3 className="h-4 w-4 mr-2" />
             Similar Cylinders
+          </TabsTrigger>
+          <TabsTrigger value="knowledge" disabled={!knowledgeBaseSuggestions.length}>
+            <Database className="h-4 w-4 mr-2" />
+            Knowledge Base
           </TabsTrigger>
         </TabsList>
         
@@ -578,6 +712,30 @@ const BomGeneratorPage = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {generatedBom.componentStatistics && (
+                      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <h4 className="font-medium mb-2">Generation Statistics</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-500">Total Components:</span>
+                            <div className="font-medium">{generatedBom.componentStatistics.totalComponents}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Avg. Compatibility:</span>
+                            <div className="font-medium">{generatedBom.componentStatistics.averageCompatibilityScore}%</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">High Confidence:</span>
+                            <div className="font-medium">{generatedBom.componentStatistics.highConfidenceComponents}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Overall Score:</span>
+                            <div className="font-medium">{generatedBom.overallRecommendationScore ? (generatedBom.overallRecommendationScore * 100).toFixed(1) : 'N/A'}%</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {generatedBom.componentCategories.map(category => (
                         <ComponentSelector
@@ -637,9 +795,28 @@ const BomGeneratorPage = () => {
                         )}
                       </Button>
                       
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        onClick={saveToKnowledgeBase}
+                        disabled={isSavingToKB}
+                      >
+                        {isSavingToKB ? (
+                          <>
+                            <Spinner className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            Save to Knowledge Base
+                          </>
+                        )}
+                      </Button>
+                      
                       <div className="text-xs text-gray-500">
                         <Info className="h-3 w-3 inline mr-1" />
-                        This will export the BOM with your selected components and quantities.
+                        Save this BOM to the knowledge base to improve future generations.
                       </div>
                     </div>
                   </CardContent>
@@ -673,6 +850,36 @@ const BomGeneratorPage = () => {
               )}
             </div>
           )}
+        </TabsContent>
+        
+        <TabsContent value="knowledge" className="mt-6">
+          <div className="space-y-4">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Knowledge Base Suggestions</h3>
+              <p className="text-sm text-gray-600">
+                These BOMs from the knowledge base have similar specifications and can be used as reference.
+              </p>
+            </div>
+            
+            {knowledgeBaseSuggestions.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {knowledgeBaseSuggestions.map((suggestion, index) => (
+                  <KnowledgeBaseSuggestionCard
+                    key={index}
+                    suggestion={suggestion}
+                    onViewDetails={() => handleViewKBDetails(suggestion)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Alert>
+                <AlertTitle>No knowledge base suggestions</AlertTitle>
+                <AlertDescription>
+                  No similar BOMs were found in the knowledge base. Build your knowledge base by exporting existing BOMs.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

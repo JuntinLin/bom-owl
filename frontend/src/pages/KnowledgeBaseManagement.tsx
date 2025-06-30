@@ -34,7 +34,9 @@ import {
   HardDrive,
   Layers,
   Brain,
-  Zap, Loader2,
+  Zap, Loader2,Pause,
+  Play,
+  X,
 } from 'lucide-react';
 
 // Import service and types
@@ -42,7 +44,9 @@ import knowledgeBaseService, {
   type KnowledgeBaseEntry,
   type KnowledgeBaseStats,
   type BatchExportResult,
-  type CleanupResult
+  type CleanupResult,
+  type BatchProgress,
+  type ProcessingLog
 } from '@/services/knowledgeBaseService';
 
 // Utility functions
@@ -57,6 +61,38 @@ const formatNumber = (num: number): string => {
   return new Intl.NumberFormat().format(num);
 };
 
+const formatDuration = (seconds?: number): string => {
+  if (!seconds) return 'N/A';
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${secs}s`;
+  } else {
+    return `${secs}s`;
+  }
+};
+
+const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+  switch (status) {
+    case 'COMPLETED':
+      return 'default';
+    case 'PROCESSING':
+      return 'secondary';
+    case 'FAILED':
+      return 'destructive';
+    case 'PAUSED':
+    case 'CANCELLED':
+      return 'outline';
+    default:
+      return 'outline';
+  }
+};
+
 // Main Component
 const KnowledgeBaseManagement = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -69,6 +105,13 @@ const KnowledgeBaseManagement = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [batchResult, setBatchResult] = useState<BatchExportResult | null>(null);
+  
+  // Batch processing states
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batchStatus, setBatchStatus] = useState<'idle' | 'processing' | 'paused' | 'completed' | 'failed'>('idle');
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+  const [batchHistory, setBatchHistory] = useState<ProcessingLog[]>([]);
+  const [isPolling, setIsPolling] = useState(false);
   
   // Search states
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -85,7 +128,43 @@ const KnowledgeBaseManagement = () => {
   // Load initial data
   useEffect(() => {
     loadStatistics();
+    loadBatchHistory();
   }, []);
+
+  // Polling for batch progress
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    if (isPolling && batchId) {
+      intervalId = setInterval(async () => {
+        try {
+          const progress = await knowledgeBaseService.getBatchProgress(batchId);
+          setBatchProgress(progress);
+          
+          // Update progress
+          setExportProgress(progress.progressPercentage || 0);
+          
+          // Check if completed
+          if (progress.status === 'COMPLETED' || progress.status === 'FAILED' || progress.status === 'CANCELLED') {
+            setIsPolling(false);
+            setBatchStatus(progress.status.toLowerCase() as any);
+            
+            // Reload statistics after completion
+            if (progress.status === 'COMPLETED') {
+              await loadStatistics();
+              toast.success(`Batch export completed: ${progress.successCount} successful, ${progress.failureCount} failed`);
+            }
+          }
+        } catch (error) {
+          console.error('Error polling batch progress:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isPolling, batchId]);
 
   const loadStatistics = async () => {
     try {
@@ -110,6 +189,15 @@ const KnowledgeBaseManagement = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadBatchHistory = async () => {
+    try {
+      const history = await knowledgeBaseService.getBatchHistory();
+      setBatchHistory(history);
+    } catch (err) {
+      console.error('Failed to load batch history:', err);
     }
   };
 
@@ -162,25 +250,28 @@ const KnowledgeBaseManagement = () => {
       setExportLoading(true);
       setExportProgress(0);
       setBatchResult(null);
-      
-      // Simulate progress updates (in real implementation, you might use WebSocket or polling)
-      const progressInterval = setInterval(() => {
-        setExportProgress(prev => Math.min(prev + 10, 90));
-      }, 1000);
+      setBatchStatus('processing');
       
       const result = await knowledgeBaseService.exportAllToKnowledgeBase({
         format: 'RDF/XML',
         includeHierarchy: true
       });
       
-      clearInterval(progressInterval);
-      setExportProgress(100);
-      setBatchResult(result);
-      
-      toast.success(`Batch export completed: ${result.successCount} successful, ${result.failureCount} failed`);
-      await loadStatistics();
+      if (result.batchId) {
+        setBatchId(result.batchId);
+        setIsPolling(true);
+        toast.success(`Batch export started with ID: ${result.batchId}`);
+      } else {
+        // Legacy response without batch ID
+        setBatchResult(result);
+        setExportProgress(100);
+        setBatchStatus('completed');
+        toast.success(`Batch export completed: ${result.successCount} successful, ${result.failureCount} failed`);
+        await loadStatistics();
+      }
       
     } catch (err) {
+      setBatchStatus('failed');
       const errorMessage = err instanceof Error ? err.message : 'Failed to perform batch export';
       toast.error(errorMessage);
       console.error('Error batch exporting:', err);
@@ -189,6 +280,44 @@ const KnowledgeBaseManagement = () => {
     }
   };
 
+  const handlePauseBatch = async () => {
+    if (!batchId) return;
+    
+    try {
+      await knowledgeBaseService.pauseBatchExport(batchId);
+      setBatchStatus('paused');
+      setIsPolling(false);
+      toast.info('Batch export paused');
+    } catch (err) {
+      toast.error('Failed to pause batch export');
+    }
+  };
+
+  const handleResumeBatch = async () => {
+    if (!batchId) return;
+    
+    try {
+      await knowledgeBaseService.resumeBatchExport(batchId);
+      setBatchStatus('processing');
+      setIsPolling(true);
+      toast.success('Batch export resumed');
+    } catch (err) {
+      toast.error('Failed to resume batch export');
+    }
+  };
+
+  const handleCancelBatch = async () => {
+    if (!batchId) return;
+    
+    try {
+      await knowledgeBaseService.cancelBatchExport(batchId);
+      setBatchStatus('completed');
+      setIsPolling(false);
+      toast.warning('Batch export cancelled');
+    } catch (err) {
+      toast.error('Failed to cancel batch export');
+    }
+  };
   const handleSearch = async () => {
     if (!searchKeyword.trim()) {
       toast.error('Please enter a search keyword');
@@ -235,6 +364,21 @@ const KnowledgeBaseManagement = () => {
       const errorMessage = err instanceof Error ? err.message : 'Failed to download file';
       toast.error(errorMessage);
       console.error('Error downloading:', err);
+    }
+  };
+
+  const handleResumePreviousBatch = async (previousBatchId: string) => {
+    setBatchId(previousBatchId);
+    setBatchStatus('processing');
+    setIsPolling(true);
+    
+    try {
+      await knowledgeBaseService.resumeBatchExport(previousBatchId);
+      toast.success('Previous batch export resumed');
+    } catch (err) {
+      setBatchStatus('failed');
+      setIsPolling(false);
+      toast.error('Failed to resume previous batch');
     }
   };
 
@@ -496,7 +640,7 @@ const KnowledgeBaseManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Batch Export */}
+            {/* Enhanced Batch Export */}
             <Card>
               <CardHeader>
                 <CardTitle>Batch Export All BOMs</CardTitle>
@@ -506,22 +650,73 @@ const KnowledgeBaseManagement = () => {
                   <Alert>
                     <AlertTitle>Batch Export</AlertTitle>
                     <AlertDescription>
-                      This will export all BOMs from the ERP system to the knowledge base. 
-                      This process may take several minutes.
+                      Export all BOMs from the ERP system to the knowledge base.
+                      This process supports pause/resume functionality.
                     </AlertDescription>
                   </Alert>
                   
-                  {exportLoading && (
-                    <div className="space-y-2">
+                  {/* Batch Progress */}
+                  {(exportLoading || batchStatus === 'processing' || batchStatus === 'paused') && batchProgress && (
+                    <div className="space-y-4">
                       <div className="flex justify-between text-sm">
                         <span>Export Progress</span>
-                        <span>{exportProgress}%</span>
+                        <span>{batchProgress.progressPercentage?.toFixed(1)}%</span>
                       </div>
                       <Progress value={exportProgress} className="w-full" />
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-500">Processed:</span>
+                          <span className="ml-2 font-medium">
+                            {batchProgress.processedItems} / {batchProgress.totalItems}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Success Rate:</span>
+                          <span className="ml-2 font-medium text-green-600">
+                            {batchProgress.processedItems > 0 
+                              ? ((batchProgress.successCount / batchProgress.processedItems) * 100).toFixed(1)
+                              : 0}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Failed:</span>
+                          <span className="ml-2 font-medium text-red-600">
+                            {batchProgress.failureCount}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Est. Time:</span>
+                          <span className="ml-2 font-medium">
+                            {formatDuration(batchProgress.estimatedRemainingSeconds)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Batch Control Buttons */}
+                      <div className="flex gap-2">
+                        {batchStatus === 'processing' && (
+                          <Button onClick={handlePauseBatch} variant="outline" size="sm">
+                            <Pause className="h-4 w-4 mr-2" />
+                            Pause
+                          </Button>
+                        )}
+                        {batchStatus === 'paused' && (
+                          <Button onClick={handleResumeBatch} variant="outline" size="sm">
+                            <Play className="h-4 w-4 mr-2" />
+                            Resume
+                          </Button>
+                        )}
+                        <Button onClick={handleCancelBatch} variant="destructive" size="sm">
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   )}
                   
-                  {batchResult && (
+                  {/* Legacy batch result display */}
+                  {batchResult && !batchId && (
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div className="flex justify-between">
@@ -544,24 +739,70 @@ const KnowledgeBaseManagement = () => {
                     </div>
                   )}
                   
-                  <Button 
-                    onClick={handleBatchExport} 
-                    disabled={exportLoading}
-                    className="w-full"
-                    variant="secondary"
-                  >
-                    {exportLoading ? (
-                      <>
-                        <Loader2  className="mr-2 h-4 w-4 animate-spin" />
-                        Batch Exporting...
-                      </>
-                    ) : (
-                      <>
-                        <Database className="mr-2 h-4 w-4" />
-                        Start Batch Export
-                      </>
+                  {/* Start Button */}
+                  {batchStatus === 'idle' && (
+                    <Button 
+                      onClick={handleBatchExport} 
+                      disabled={exportLoading}
+                      className="w-full"
+                      variant="secondary"
+                    >
+                      {exportLoading ? (
+                        <>
+                          <Loader2  className="mr-2 h-4 w-4 animate-spin" />
+                          Starting Batch Export...
+                        </>
+                      ) : (
+                        <>
+                          <Database className="mr-2 h-4 w-4" />
+                          Start Batch Export
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  
+                  {/* Batch History */}
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-medium">Recent Batch Operations</h4>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={loadBatchHistory}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    
+                    {batchHistory.length > 0 && (
+                      <div className="space-y-2">
+                        {batchHistory.slice(0, 3).map(log => (
+                          <div key={log.batchId} className="text-xs p-2 bg-gray-50 rounded">
+                            <div className="flex justify-between">
+                              <span className="font-medium">{log.batchId.substring(0, 8)}...</span>
+                              <Badge variant={getStatusVariant(log.status)} className="text-xs">
+                                {log.status}
+                              </Badge>
+                            </div>
+                            <div className="flex justify-between mt-1 text-gray-500">
+                              <span>{new Date(log.startTime).toLocaleString()}</span>
+                              <span>{log.successCount}/{log.totalItems} succeeded</span>
+                            </div>
+                            {log.status === 'PAUSED' && (
+                              <Button 
+                                size="sm" 
+                                variant="link" 
+                                className="mt-1 p-0 h-auto text-xs"
+                                onClick={() => handleResumePreviousBatch(log.batchId)}
+                              >
+                                Resume this batch
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

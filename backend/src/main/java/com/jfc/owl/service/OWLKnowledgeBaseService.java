@@ -149,4 +149,21 @@ public interface OWLKnowledgeBaseService {
      * @return List of matching entries
      */
     List<OWLKnowledgeBase> getKnowledgeBaseEntriesByCriteria(Map<String, Object> criteria);
+    
+    /**
+     * 恢復批次匯出處理
+     * @param batchId 批次ID
+     * @return 處理結果
+     */
+    Map<String, Object> resumeBatchExport(String batchId);
+    
+    /**
+     * 暫停批次處理
+     */
+    Map<String, Object> pauseBatchExport(String batchId);
+
+    /**
+     * 取消批次處理
+     */
+    Map<String, Object> cancelBatchExport(String batchId);
 }

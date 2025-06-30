@@ -642,4 +642,23 @@ public class OWLKnowledgeBaseServiceMock implements OWLKnowledgeBaseService {
             ? "hydraulic-cylinders" : "standard-boms";
         return Paths.get(exportPath, subDir, generateFileName(masterItemCode, format)).toString();
     }
+
+	@Override
+	public Map<String, Object> resumeBatchExport(String batchId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Map<String, Object> pauseBatchExport(String batchId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Map<String, Object> cancelBatchExport(String batchId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+    
 }

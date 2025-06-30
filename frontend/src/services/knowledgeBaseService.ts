@@ -54,6 +54,7 @@ export interface KnowledgeBaseStats {
 }
 
 export interface BatchExportResult {
+  batchId?: string; // Added for new batch processing
   totalItems: number;
   successfulExports: string[];
   failedExports: string[];
@@ -88,6 +89,38 @@ export interface ExportRequest {
 export interface BatchExportRequest {
   format: string;
   includeHierarchy: boolean;
+}
+
+export interface BatchProgress {
+  batchId: string;
+  totalItems: number;
+  processedItems: number;
+  successCount: number;
+  failureCount: number;
+  status: string;
+  startTime: string;
+  endTime?: string;
+  progressPercentage?: number;
+  estimatedRemainingSeconds?: number;
+}
+
+export interface ProcessingLog {
+  batchId: string;
+  status: string;
+  totalItems: number;
+  processedItems: number;
+  successCount: number;
+  failureCount: number;
+  startTime: string;
+  endTime?: string;
+  errorDetails?: string;
+  skippedCount?: number;
+  averageTimePerItem?: number;
+  estimatedCompletionTime?: string;
+  lastProcessedItemCode?: string;
+  checkpointData?: string;
+  processingParameters?: string;
+  notes?: string;
 }
 
 // Use the axios instance with basic interceptors
@@ -371,6 +404,103 @@ export const knowledgeBaseService = {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get batch processing progress
+   */
+  getBatchProgress: async (batchId: string): Promise<BatchProgress> => {
+    try {
+      const response = await knowledgeBaseApi.get<ApiResponse<BatchProgress>>(
+        `${BASE_URL}/batch-progress/${batchId}`
+      );
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to get batch progress');
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Resume a paused or interrupted batch export
+   */
+  resumeBatchExport: async (batchId: string): Promise<BatchExportResult> => {
+    try {
+      const response = await knowledgeBaseApi.post<ApiResponse<BatchExportResult>>(
+        `${BASE_URL}/resume-batch/${batchId}`
+      );
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to resume batch export');
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Pause a running batch export
+   */
+  pauseBatchExport: async (batchId: string): Promise<void> => {
+    try {
+      const response = await knowledgeBaseApi.post<ApiResponse<any>>(
+        `${BASE_URL}/pause-batch/${batchId}`
+      );
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to pause batch export');
+      }
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Cancel a running or paused batch export
+   */
+  cancelBatchExport: async (batchId: string): Promise<void> => {
+    try {
+      const response = await knowledgeBaseApi.post<ApiResponse<any>>(
+        `${BASE_URL}/cancel-batch/${batchId}`
+      );
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to cancel batch export');
+      }
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get batch processing history
+   */
+  getBatchHistory: async (limit = 10): Promise<ProcessingLog[]> => {
+    try {
+      const response = await knowledgeBaseApi.get<ApiResponse<ProcessingLog[]>>(
+        `${BASE_URL}/batch-history`,
+        { params: { limit } }
+      );
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to get batch history');
+      }
+      
+      return response.data.data;
     } catch (error) {
       handleApiError(error);
       throw error;

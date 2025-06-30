@@ -26,6 +26,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import org.apache.jena.ontology.OntModel;
 import org.apache.jena.riot.RDFDataMgr;
@@ -57,10 +58,13 @@ public class TiptopOwlController extends AbstractDTOController<ImaFile> {
 	 * Get all materials
 	 */
 	@GetMapping("/materials")
-	public ResponseEntity<ApiResponse<List<ImaFile>>> getAllMaterials() {
+	public ResponseEntity<ApiResponse<List<ImaDTO>>> getAllMaterials() {
 		try {
 			List<ImaFile> materials = imaRepository.findByIma09AndIma10("S", "130 HC");
-			return success(materials);
+			List<ImaDTO> dtoList = materials.stream()
+		            .map(this::convertToDTO)
+		            .collect(Collectors.toList());
+			return success(dtoList);
 		} catch (Exception e) {
 			return error("Failed to retrieve materials: " + e.getMessage());
 		}
@@ -70,7 +74,7 @@ public class TiptopOwlController extends AbstractDTOController<ImaFile> {
 	 * Search materials by name
 	 */
 	@GetMapping("/materials/search")
-	public ResponseEntity<ApiResponse<List<ImaFile>>> searchMaterials(@RequestParam String query) {
+	public ResponseEntity<ApiResponse<List<ImaDTO>>> searchMaterials(@RequestParam String query) {
 		try {
 			// Search by either code, name or specification
 			List<ImaFile> byName = imaRepository.findByIma02ContainingIgnoreCase(query);
@@ -78,9 +82,25 @@ public class TiptopOwlController extends AbstractDTOController<ImaFile> {
 
 			// Combine results, removing duplicates
 			Set<ImaFile> combinedResults = new HashSet<>(byName);
-			combinedResults.addAll(bySpec);
+			// Use Map to ensure uniqueness by ima01 (item code)
+	        Map<String, ImaFile> uniqueResults = new LinkedHashMap<>();
+	        
+	        // Add results from name search
+	        for (ImaFile item : byName) {
+	            uniqueResults.put(item.getIma01(), item);
+	        }
+	        
+	        // Add results from spec search (will not duplicate if already exists)
+	        for (ImaFile item : bySpec) {
+	            uniqueResults.put(item.getIma01(), item);
+	        }
+			
+			// Convert to DTOs
+	        List<ImaDTO> dtoList = combinedResults.stream()
+	            .map(this::convertToDTO)
+	            .collect(Collectors.toList());
 
-			return success(new ArrayList<>(combinedResults));
+			return success(dtoList);
 		} catch (Exception e) {
 			return error("Error searching materials: " + e.getMessage());
 		}
@@ -120,12 +140,12 @@ public class TiptopOwlController extends AbstractDTOController<ImaFile> {
 			if (materialOptional.isPresent()) {
 				ImaFile material = materialOptional.get();
 				// Convert entity to DTO
-				ImaDTO dto = new ImaDTO();
+				ImaDTO dto = convertToDTO(material); /* new ImaDTO();
 				dto.setIma01(material.getIma01());
 				dto.setIma02(material.getIma02());
 				dto.setIma021(material.getIma021());
 				// Add other fields as needed, but don't include the ecmFiles collection
-
+				*/
 				return success(dto);
 			} else {
 				System.out.println("Material not found with code: " + code);
@@ -139,6 +159,14 @@ public class TiptopOwlController extends AbstractDTOController<ImaFile> {
 		}
 	}
 
+	private ImaDTO convertToDTO(ImaFile ima) {
+	    ImaDTO dto = new ImaDTO();
+	    dto.setIma01(ima.getIma01());
+	    dto.setIma02(ima.getIma02());
+	    dto.setIma021(ima.getIma021());
+	    // Add other fields as needed, but don't include the ecmFiles collection
+	    return dto;
+	}
 	/**
 	 * Get BOM hierarchy for a master item as a tree structure
 	 */
