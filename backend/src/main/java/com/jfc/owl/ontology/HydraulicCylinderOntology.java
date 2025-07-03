@@ -37,6 +37,7 @@ public class HydraulicCylinderOntology {
     private static final String BASE_URI = "http://www.jfc.com/tiptop/ontology#";
     private static final String HC_URI = "http://www.jfc.com/tiptop/hydraulic-cylinder#";
     
+    private static volatile HydraulicCylinderOntology instance;
     private OntModel ontModel;
     private Map<String, OntClass> classes;
     private Map<String, OntProperty> properties;
@@ -49,7 +50,14 @@ public class HydraulicCylinderOntology {
      */
     @PostConstruct
     public void init() {
-        initializeHydraulicCylinderOntology();
+        if (instance == null) {
+            synchronized (HydraulicCylinderOntology.class) {
+                if (instance == null) {
+                    instance = this;
+                    initializeHydraulicCylinderOntology();
+                }
+            }
+        }
     }
     
     /**
@@ -70,7 +78,16 @@ public class HydraulicCylinderOntology {
 	        logger.info("Initializing Hydraulic Cylinder Ontology");
 	        
 	        // Create ontology model with OWL reasoning support
-	        ontModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_DL_MEM_RULE_INF);
+	        /*
+	         * Use Lighter Reasoning Profile
+			   Replace OntModelSpec.OWL_DL_MEM_RULE_INF with a lighter reasoning profile:
+	        */
+	        // ontModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_DL_MEM_RULE_INF);
+	        // Use:
+	        ontModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM_MICRO_RULE_INF);
+	        // or even:
+	        //ontModel = ModelFactory.createOntologyModel(OntModelSpec.OWL_MEM);
+	        
 	        classes = new HashMap<>();
 	        properties = new HashMap<>();
 	        
@@ -93,6 +110,9 @@ public class HydraulicCylinderOntology {
 	        
 	        // Add specialized constraints and axioms
 	        addDomainConstraints();
+	        
+	     // Mark as initialized AFTER everything is done
+	        initialized = true;
 	        
 	        logger.info("Hydraulic Cylinder Ontology initialization completed");
     	}finally {

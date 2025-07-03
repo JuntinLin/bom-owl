@@ -27,3 +27,4 @@ frontend/yarn-error.log*
 # General
 .DS_Store
 # /backend/
+"backend/heap_dumps/" 

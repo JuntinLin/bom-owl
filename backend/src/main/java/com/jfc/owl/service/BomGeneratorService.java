@@ -52,7 +52,7 @@ public class BomGeneratorService {
      */
     public Map<String, Object> generateNewBom(String newItemCode, String itemName, String itemSpec) {
         logger.info("Generating enhanced BOM for hydraulic cylinder: {}", newItemCode);
-        
+        InfModel reasonedModel = null;
         try {
             // Initialize the specialized hydraulic cylinder ontology
             hydraulicCylinderOntology.initializeHydraulicCylinderOntology();
@@ -81,7 +81,7 @@ public class BomGeneratorService {
             OntModel enhancedOntModel = hydraulicCylinderOntology.getOntologyModel();
             
             // Apply reasoning to classify the cylinder and infer relationships
-            InfModel reasonedModel = hydraulicCylinderRules.applyEnhancedHydraulicCylinderRules(enhancedOntModel);
+            reasonedModel = hydraulicCylinderRules.applyEnhancedHydraulicCylinderRules(enhancedOntModel);
             
             // Generate compatible components using the specialized ontology
             List<HydraulicCylinderOntology.ComponentSuggestion> componentSuggestions = 
@@ -106,6 +106,13 @@ public class BomGeneratorService {
             errorResult.put("error", e.getMessage());
             errorResult.put("stackTrace", Arrays.toString(e.getStackTrace()));
             return errorResult;
+        }finally {
+            // Clean up temporary models
+            if (reasonedModel != null) {
+                reasonedModel.close();
+            }
+            // Force garbage collection for large objects
+            System.gc();
         }
     }
     
