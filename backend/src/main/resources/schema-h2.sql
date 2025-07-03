@@ -58,6 +58,9 @@ CREATE INDEX idx_usage_count ON owl_knowledge_base(usage_count);
 CREATE INDEX idx_last_accessed ON owl_knowledge_base(last_accessed);
 CREATE INDEX idx_batch_id ON owl_knowledge_base(batch_id);
 
+CREATE INDEX idx_owl_kb_source_system ON owl_knowledge_base(source_system);
+CREATE INDEX idx_owl_kb_hydraulic_active ON owl_knowledge_base(is_hydraulic_cylinder, active);
+
 -- Create composite indexes for complex queries
 CREATE INDEX idx_active_hydraulic ON owl_knowledge_base(active, is_hydraulic_cylinder);
 CREATE INDEX idx_active_format ON owl_knowledge_base(active, format);

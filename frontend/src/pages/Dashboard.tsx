@@ -72,7 +72,8 @@ const Dashboard = () => {
 
   const handleGenerateNewBom = () => {
     // Navigate to reasoning dashboard with generator tab active
-    navigate('/reasoning/new?tab=generator');
+    //navigate('/reasoning/new?tab=generator');
+    navigate('/bom-generator');
   };
 
   const StatCard = ({ title, value, icon, color }: StatCardProps) => (
@@ -222,27 +223,35 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Knowledge Base Management Card */}
+        {/* Knowledge Base Management Card - UPDATED */}
         <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-dashed border-green-200 hover:border-green-400">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-green-100 rounded-full">
                 <HardDrive className="w-6 h-6 text-green-600" />
               </div>
-              <Link to="/knowledge-base">
-                <Button variant="outline">
-                  Manage KB
-                </Button>
-              </Link>
+              <div className="flex gap-2">
+                <Link to="/knowledge-base">
+                  <Button variant="outline" size="sm">
+                    Manage KB
+                  </Button>
+                </Link>
+                <Link to="/knowledge-base/search">
+                  <Button variant="outline" size="sm">
+                    <Search className="h-4 w-4 mr-1" />
+                    Search
+                  </Button>
+                </Link>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold mb-2">Knowledge Base Management</h3>
+            <h3 className="text-lg font-semibold mb-2">Knowledge Base</h3>
             <p className="text-gray-600 text-sm mb-4">
-              Manage OWL knowledge base, export BOMs from ERP, search similar products, and maintain the knowledge repository.
+              Manage OWL knowledge base, export BOMs, and search for similar products using advanced similarity algorithms.
             </p>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center text-green-600">
                 <Brain className="w-4 h-4 mr-1" />
-                <span>Intelligent Knowledge Storage</span>
+                <span>Intelligent Storage</span>
               </div>
               {kbStats && (
                 <Badge variant="outline">
@@ -472,10 +481,16 @@ const Dashboard = () => {
               <div className="text-sm text-gray-600">Hydraulic Cylinders</div>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <Link to="/knowledge-base" className="text-blue-600 hover:text-blue-800">
-                <Settings className="w-6 h-6 mx-auto mb-1" />
-                <div className="text-sm">Manage</div>
-              </Link>
+              <div className="flex justify-center gap-2">
+                <Link to="/knowledge-base" className="text-blue-600 hover:text-blue-800">
+                  <Settings className="w-6 h-6" />
+                  <div className="text-sm">Manage</div>
+                </Link>
+                <Link to="/knowledge-base/search" className="text-green-600 hover:text-green-800">
+                  <Search className="w-6 h-6" />
+                  <div className="text-sm">Search</div>
+                </Link>
+              </div>
             </div>
           </div>
         </CardContent>

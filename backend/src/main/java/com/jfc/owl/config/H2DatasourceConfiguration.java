@@ -32,6 +32,9 @@ public class H2DatasourceConfiguration {
 	@Value("${spring.jpa.hibernate.ddl-auto:none}")
 	private String ddlAuto;
 	
+	@Value("${spring.sql.init.mode:always}")
+	private String sqlInitMode;
+	
 	@Bean(name = "h2Properties")
 	@ConfigurationProperties("spring.datasource.h2")
 	DataSourceProperties dataSourceProperties() {

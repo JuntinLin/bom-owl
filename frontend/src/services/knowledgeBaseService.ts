@@ -70,15 +70,6 @@ export interface CleanupResult {
   errorCount: number;
 }
 
-export interface SimilarBOM {
-  masterItemCode: string;
-  fileName: string;
-  description: string;
-  similarityScore: number;
-  createdAt: string;
-  tripleCount: number;
-}
-
 export interface ExportRequest {
   masterItemCode: string;
   format: string;
@@ -277,25 +268,19 @@ export const knowledgeBaseService = {
   },
 
   /**
-   * Search for similar BOMs based on specifications
+   * NOTE: searchSimilarBOMs has been moved to knowledgeBaseSearchService
+   * Use knowledgeBaseSearchService.searchSimilar() instead
+   * 
+   * Example migration:
+   * Before: 
+   *   const results = await knowledgeBaseService.searchSimilarBOMs(specifications);
+   * 
+   * After:
+   *   import knowledgeBaseSearchService from '@/services/knowledgeBaseSearchService';
+   *   const searchRequest = knowledgeBaseSearchService.buildSearchRequest(specifications);
+   *   const searchResult = await knowledgeBaseSearchService.searchSimilar(searchRequest);
+   *   const results = searchResult.results || [];
    */
-  searchSimilarBOMs: async (specifications: Record<string, string>): Promise<SimilarBOM[]> => {
-    try {
-      const response = await knowledgeBaseApi.post<ApiResponse<SimilarBOM[]>>(
-        `${BASE_URL}/search-similar`,
-        specifications
-      );
-      
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'Failed to search similar BOMs');
-      }
-      
-      return response.data.data;
-    } catch (error) {
-      handleApiError(error);
-      throw error;
-    }
-  },
 
   /**
    * Search knowledge base entries by keyword

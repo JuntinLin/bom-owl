@@ -12,7 +12,8 @@ import {
   BrainIcon,
   InfoIcon,
   HardDrive,
-} from 'lucide-react';
+  Layers,
+  Search} from 'lucide-react';
 
 interface SidebarLinkProps {
   to: string;
@@ -84,8 +85,9 @@ const Sidebar = () => {
             </p>
           )}
 
-          <SidebarLink to="/knowledge-base" icon={<HardDrive className="h-4 w-4" />} label="Knowledge Base" />
-          
+          <SidebarLink to="/knowledge-base" icon={<HardDrive className="h-4 w-4" />} label="KB Management" />
+          <SidebarLink to="/knowledge-base/search" icon={<Search className="h-4 w-4" />} label="KB Search" />
+          <SidebarLink to="/bom-generator" icon={<Layers className="h-4 w-4" />} label="BOM Generator" />
 
           <div className="my-2 px-3">
             <div className={cn("h-[1px] bg-border", isCollapsed ? "w-4 mx-auto" : "w-full")} />

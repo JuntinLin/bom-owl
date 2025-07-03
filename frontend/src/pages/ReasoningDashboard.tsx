@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useKnowledgeBaseStats } from '@/hooks/useKnowledgeBase';
 
 // Services
 import reasoningService from '@/services/reasoningService';
@@ -26,9 +25,16 @@ import {
 } from '@/services/bomGeneratorService';
 
 // Types
-import { ReasoningResult, ReasonerInfo } from '@/types/tiptop';
+import { 
+  ReasoningResult, 
+  ReasonerInfo,
+  SparqlQueryResult,
+  CustomRuleResult,
+  PredefinedQuery,
+  ExampleRule
+} from '@/types/tiptop';
 
-// Import the reasoning components we've created
+// Import the reasoning components
 import ReasonerResults from '@/components/reasoning/ReasonerResults';
 import SparqlQueryPanel from '@/components/reasoning/SparqlQueryPanel';
 import CustomRulesPanel from '@/components/reasoning/CustomRulesPanel';
@@ -49,7 +55,7 @@ import {
   List
 } from 'lucide-react';
 
-// Component interfaces for BOM Generator
+// Component interfaces
 interface ComponentSelectorProps {
   category: ComponentCategory;
   selectedOption: string;
@@ -71,10 +77,22 @@ const ComponentSelector = ({
   onChangeQuantity,
   quantity 
 }: ComponentSelectorProps) => {
+  const selectedComponent = category.options.find(opt => opt.code === selectedOption);
+  
   return (
     <Card className="mb-4">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{category.category}</CardTitle>
+        <CardTitle className="text-lg flex items-center justify-between">
+          {category.categoryDisplayName || category.category}
+          {category.isRequired && (
+            <Badge variant="default" className="text-xs">Required</Badge>
+          )}
+        </CardTitle>
+        {category.categoryDescription && (
+          <p className="text-sm text-gray-600 mt-1">
+            {category.categoryDescription}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">
@@ -91,14 +109,39 @@ const ComponentSelector = ({
                 {category.options.map(option => (
                   <SelectItem key={option.code} value={option.code}>
                     <div className="flex flex-col">
-                      <span>{option.name}</span>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{option.name}</span>
+                        {option.compatibilityScore && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {(option.compatibilityScore * 100).toFixed(0)}% match
+                          </Badge>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-500">{option.code}</span>
+                      {option.description && (
+                        <span className="text-xs text-gray-400">{option.description}</span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          {selectedComponent && selectedComponent.recommendationLevel && (
+            <div className="p-2 bg-blue-50 rounded text-sm">
+              <span className="font-medium">Recommendation: </span>
+              <span className={`
+                ${selectedComponent.recommendationLevel === 'Highly Recommended' ? 'text-green-700' : ''}
+                ${selectedComponent.recommendationLevel === 'Recommended' ? 'text-blue-700' : ''}
+                ${selectedComponent.recommendationLevel === 'Consider' ? 'text-yellow-700' : ''}
+                ${selectedComponent.recommendationLevel === 'Alternative' ? 'text-gray-700' : ''}
+              `}>
+                {selectedComponent.recommendationLevel}
+              </span>
+            </div>
+          )}
+          
           <div>
             <Label htmlFor={`${category.category}-quantity`}>Quantity</Label>
             <Input
@@ -124,6 +167,9 @@ const SimilarCylinderCard = ({ cylinder, onUseAsReference }: SimilarCylinderCard
           <CardTitle className="text-lg">{cylinder.name || cylinder.code}</CardTitle>
           <Badge>{cylinder.similarityScore}% Match</Badge>
         </div>
+        {cylinder.spec && (
+          <p className="text-sm text-gray-600 mt-1">{cylinder.spec}</p>
+        )}
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-2 text-sm mb-4">
@@ -139,6 +185,14 @@ const SimilarCylinderCard = ({ cylinder, onUseAsReference }: SimilarCylinderCard
           <div>
             <span className="font-medium">Stroke:</span> {cylinder.specifications.stroke}
           </div>
+          <div>
+            <span className="font-medium">Rod End:</span> {cylinder.specifications.rodEndType}
+          </div>
+          {cylinder.specifications.installationType && (
+            <div>
+              <span className="font-medium">Installation:</span> {cylinder.specifications.installationType}
+            </div>
+          )}
         </div>
         <Button variant="outline" className="w-full" onClick={onUseAsReference}>
           <Share2 className="h-4 w-4 mr-2" />
@@ -148,6 +202,7 @@ const SimilarCylinderCard = ({ cylinder, onUseAsReference }: SimilarCylinderCard
     </Card>
   );
 };
+
 const ReasoningDashboard = () => {
   const { masterItemCode } = useParams<{ masterItemCode: string }>();
   const navigate = useNavigate();
@@ -174,8 +229,6 @@ const ReasoningDashboard = () => {
   const [selectedComponents, setSelectedComponents] = useState<Record<string, string>>({});
   const [componentQuantities, setComponentQuantities] = useState<Record<string, number>>({});
   const [exportFormat, setExportFormat] = useState('JSONLD');
-
-  const { stats: kbStats } = useKnowledgeBaseStats();
   
   useEffect(() => {
     // Fetch available reasoners when component mounts
@@ -184,12 +237,17 @@ const ReasoningDashboard = () => {
         const reasoners = await reasoningService.getAvailableReasoners();
         setAvailableReasoners(reasoners);
       } catch (err) {
-        setError('Failed to load available reasoners');
         console.error('Error fetching reasoners:', err);
+        // Set default reasoners if API fails
+        setAvailableReasoners([
+          { id: 'OWL', name: 'OWL Reasoner', description: 'Full OWL reasoning support' },
+          { id: 'RDFS', name: 'RDFS Reasoner', description: 'Simple RDFS reasoning' },
+          { id: 'OWL_MINI', name: 'OWL Mini', description: 'Lightweight OWL reasoning' }
+        ]);
       }
     };
     
-    // Fetch material details to show the name
+    // Fetch material details if masterItemCode is provided
     const fetchMaterialDetails = async () => {
       if (masterItemCode) {
         try {
@@ -199,7 +257,6 @@ const ReasoningDashboard = () => {
           setItemSpec(material.ima021 || '');
         } catch (err) {
           console.error('Error fetching material details:', err);
-          // Not setting error here as it's not critical
         }
       }
     };
@@ -216,7 +273,9 @@ const ReasoningDashboard = () => {
       
       generatedBom.componentCategories.forEach(category => {
         if (category.options.length > 0) {
-          initialComponents[category.category] = category.options[0].code;
+          // Select the recommended option if available, otherwise the first one
+          const recommendedOption = category.recommendedOption || category.options[0];
+          initialComponents[category.category] = recommendedOption.code;
         }
         initialQuantities[category.category] = category.defaultQuantity;
       });
@@ -225,6 +284,13 @@ const ReasoningDashboard = () => {
       setComponentQuantities(initialQuantities);
     }
   }, [generatedBom]);
+  
+  // If no master item code is provided, redirect to search page
+  useEffect(() => {
+    if (!masterItemCode) {
+      navigate('/items');
+    }
+  }, [masterItemCode, navigate]);
   
   // Reasoning functions
   const performReasoning = async () => {
@@ -239,8 +305,11 @@ const ReasoningDashboard = () => {
     try {
       const result = await reasoningService.performReasoning(masterItemCode, reasonerType);
       setReasoningResult(result);
+      toast.success('Reasoning completed successfully');
     } catch (err: any) {
-      setError(err.message || 'Error performing reasoning. Please try again.');
+      const errorMessage = err.message || 'Error performing reasoning. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
       console.error('Reasoning error:', err);
     } finally {
       setLoading(false);
@@ -263,14 +332,15 @@ const ReasoningDashboard = () => {
       
       if (!result.isValid) {
         setError(result.message);
+        toast.error(result.message);
+      } else {
+        toast.success('Code validated successfully');
       }
       
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred during validation');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred during validation';
+      setError(errorMessage);
+      toast.error(errorMessage);
       setCodeValidation(null);
     } finally {
       setIsValidating(false);
@@ -296,13 +366,12 @@ const ReasoningDashboard = () => {
       const result = await bomGeneratorService.generateNewBom(newItemInfo);
       setGeneratedBom(result);
       setBomActiveTab('components');
+      toast.success('BOM generated successfully');
       
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred during BOM generation');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred during BOM generation';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -318,9 +387,17 @@ const ReasoningDashboard = () => {
     setError(null);
     
     try {
-      const exportBom = { ...generatedBom };
+      // Create a modified BOM structure with selected components
+      const exportBom = { 
+        ...generatedBom,
+        // Add selected components and quantities if needed
+        selectedComponents,
+        componentQuantities
+      };
+      
       const ontology = await bomGeneratorService.exportGeneratedBom(exportBom, exportFormat);
       
+      // Create download
       const blob = new Blob([ontology], { type: getContentType(exportFormat) });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -334,11 +411,9 @@ const ReasoningDashboard = () => {
       toast.success('BOM exported successfully');
       
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred during export');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred during export';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsExporting(false);
     }
@@ -395,13 +470,6 @@ const ReasoningDashboard = () => {
         return 'jsonld';
     }
   };
-  
-  // If no master item code is provided, redirect to search page
-  useEffect(() => {
-    if (!masterItemCode) {
-      navigate('/items');
-    }
-  }, [masterItemCode, navigate]);
   
   return (
     <div className="container mx-auto py-6">
@@ -503,20 +571,7 @@ const ReasoningDashboard = () => {
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center p-12 text-center">
                     <div className="rounded-full bg-gray-100 p-4 mb-4">
-                      <svg 
-                        className="h-8 w-8 text-gray-500" 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" 
-                        />
-                      </svg>
+                      <Brain className="h-8 w-8 text-gray-500" />
                     </div>
                     <h3 className="text-lg font-medium mb-2">No Reasoning Results</h3>
                     <p className="text-gray-500 mb-4">
@@ -542,9 +597,9 @@ const ReasoningDashboard = () => {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Hydraulic Cylinder BOM Generator</CardTitle>
-              <CardContent className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 mt-2">
                 Generate intelligent BOMs for new hydraulic cylinders using semantic reasoning and domain knowledge.
-              </CardContent>
+              </p>
             </CardHeader>
           </Card>
 
@@ -680,8 +735,8 @@ const ReasoningDashboard = () => {
                     <div className="space-y-4">
                       <div className="bg-gray-100 p-3 rounded-md font-mono text-sm mb-2">
                         <span className="text-blue-600">3</span>
-                        <span className="text-green-600">S</span>
-                        <span className="text-yellow-600">A</span>
+                        <span className="text-green-600">12</span>
+                        <span className="text-yellow-600">F</span>
                         <span className="text-red-600">050</span>
                         <span className="text-gray-400">-</span>
                         <span className="text-purple-600">0150</span>
@@ -689,27 +744,27 @@ const ReasoningDashboard = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <span className="inline-block w-3 h-3 bg-blue-600 mr-1"></span>
-                          <span>Product Type</span>
+                          <span className="inline-block w-3 h-3 bg-blue-600 mr-1 rounded"></span>
+                          <span>Product Type (3 or 4)</span>
                         </div>
                         <div>
-                          <span className="inline-block w-3 h-3 bg-green-600 mr-1"></span>
-                          <span>Series</span>
+                          <span className="inline-block w-3 h-3 bg-green-600 mr-1 rounded"></span>
+                          <span>Series (e.g., 12)</span>
                         </div>
                         <div>
-                          <span className="inline-block w-3 h-3 bg-yellow-600 mr-1"></span>
-                          <span>Type</span>
+                          <span className="inline-block w-3 h-3 bg-yellow-600 mr-1 rounded"></span>
+                          <span>Type (e.g., F)</span>
                         </div>
                         <div>
-                          <span className="inline-block w-3 h-3 bg-red-600 mr-1"></span>
-                          <span>Bore Size</span>
+                          <span className="inline-block w-3 h-3 bg-red-600 mr-1 rounded"></span>
+                          <span>Bore Size (mm)</span>
                         </div>
                         <div>
-                          <span className="inline-block w-3 h-3 bg-purple-600 mr-1"></span>
-                          <span>Stroke Length</span>
+                          <span className="inline-block w-3 h-3 bg-purple-600 mr-1 rounded"></span>
+                          <span>Stroke Length (mm)</span>
                         </div>
                         <div>
-                          <span className="inline-block w-3 h-3 bg-pink-600 mr-1"></span>
+                          <span className="inline-block w-3 h-3 bg-pink-600 mr-1 rounded"></span>
                           <span>Rod End Type</span>
                         </div>
                       </div>
@@ -723,6 +778,38 @@ const ReasoningDashboard = () => {
               {generatedBom && (
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                   <div className="lg:col-span-3 space-y-4">
+                    {generatedBom.componentStatistics && (
+                      <Card className="mb-4">
+                        <CardHeader>
+                          <CardTitle>Generation Statistics</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">Total Components:</span>
+                              <div className="font-medium">{generatedBom.componentStatistics.totalComponents}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Avg. Compatibility:</span>
+                              <div className="font-medium">{generatedBom.componentStatistics.averageCompatibilityScore}%</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">High Confidence:</span>
+                              <div className="font-medium">{generatedBom.componentStatistics.highConfidenceComponents}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Overall Score:</span>
+                              <div className="font-medium">
+                                {generatedBom.overallRecommendationScore 
+                                  ? (generatedBom.overallRecommendationScore * 100).toFixed(1) 
+                                  : 'N/A'}%
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    
                     {generatedBom.componentCategories.map(category => (
                       <ComponentSelector
                         key={category.category}
@@ -764,7 +851,7 @@ const ReasoningDashboard = () => {
                             className="w-full"
                             onClick={exportBom}
                             disabled={isExporting}
-                            variant={"outline"}
+                            variant="outline"
                           >
                             {isExporting ? (
                               <>

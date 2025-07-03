@@ -8,6 +8,8 @@ import ExportPage from '@/pages/ExportPage';
 import NotFound from '@/pages/NotFound';
 import ReasoningDashboard from '@/pages/ReasoningDashboard';
 import KnowledgeBaseManagement from '@/pages/KnowledgeBaseManagement';
+import KnowledgeBaseSearch from '@/pages/KnowledgeBaseSearch';
+import BomGeneratorPage from '@/pages/BomGeneratorPage';
 
 const AppRoutes = () => {
   return (
@@ -19,6 +21,8 @@ const AppRoutes = () => {
       <Route path="/export" element={<ExportPage />} />
       <Route path="/reasoning/:masterItemCode" element={<ReasoningDashboard />} />
       <Route path="/knowledge-base" element={<KnowledgeBaseManagement />} />
+      <Route path="/knowledge-base/search" element={<KnowledgeBaseSearch />} />      
+      <Route path="/bom-generator" element={<BomGeneratorPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

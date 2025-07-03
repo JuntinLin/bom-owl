@@ -2,6 +2,8 @@ package com.jfc.owl.repository;
 
 import com.jfc.owl.entity.ProcessingLog;
 import com.jfc.owl.entity.ProcessingLog.ProcessingStatus;
+
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -49,8 +51,13 @@ public interface ProcessingLogRepository extends JpaRepository<ProcessingLog, Lo
     
     /**
      * 查找最近的處理記錄
-     */
+     
+    @Query(value = "SELECT * FROM (SELECT * FROM owl_processing_log ORDER BY start_time DESC) WHERE ROWNUM <= 10", 
+    	       nativeQuery = true)*/
     List<ProcessingLog> findTop10ByOrderByStartTimeDesc();
+    
+ 
+    List<ProcessingLog> findAllByOrderByStartTimeDesc(Pageable pageable);
     
     /**
      * 查找未完成的處理記錄（用於恢復）
@@ -138,18 +145,16 @@ public interface ProcessingLogRepository extends JpaRepository<ProcessingLog, Lo
      * 查找效能最佳的批次
      */
     @Query("SELECT pl FROM ProcessingLog pl WHERE pl.status = 'COMPLETED' " +
-           "AND pl.averageTimePerItem IS NOT NULL " +
-           "ORDER BY pl.averageTimePerItem ASC " +
-           "LIMIT 10")
+            "AND pl.averageTimePerItem IS NOT NULL " +
+            "ORDER BY pl.averageTimePerItem ASC")
     List<ProcessingLog> findTopPerformingBatches();
     
     /**
      * 查找效能最差的批次
      */
     @Query("SELECT pl FROM ProcessingLog pl WHERE pl.status = 'COMPLETED' " +
-           "AND pl.averageTimePerItem IS NOT NULL " +
-           "ORDER BY pl.averageTimePerItem DESC " +
-           "LIMIT 10")
+            "AND pl.averageTimePerItem IS NOT NULL " +
+            "ORDER BY pl.averageTimePerItem DESC")
     List<ProcessingLog> findWorstPerformingBatches();
     
     /**
@@ -188,4 +193,6 @@ public interface ProcessingLogRepository extends JpaRepository<ProcessingLog, Lo
                        @Param("successCount") int successCount,
                        @Param("failureCount") int failureCount,
                        @Param("lastItemCode") String lastItemCode);
+    
+    
 }

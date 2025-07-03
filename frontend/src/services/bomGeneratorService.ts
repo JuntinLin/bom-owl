@@ -4,7 +4,8 @@ import axios, { AxiosError } from 'axios';
 import axiosRetry from 'axios-retry';
 import createAxiosWithInterceptors from '@/utils/axiosInterceptor';
 import { ApiResponse } from '@/types/tiptop';
-import { SimilarBOM } from './knowledgeBaseService';
+import { SimilarBOMDTO } from './knowledgeBaseSearchService';
+
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/owl';
 const BASE_URL = '/bom-generator';
@@ -80,7 +81,7 @@ export interface GeneratedBom {
   validationWarnings?: string[];
   componentCategories: ComponentCategory[];
   similarCylinders: SimilarCylinder[];
-  knowledgeBaseSuggestions?: SimilarBOM[];
+  knowledgeBaseSuggestions?: SimilarBOMDTO[]; // Updated to use SimilarBOMDTO
   overallRecommendationScore?: number;
   componentStatistics?: ComponentStatistics;
   generationMetadata?: {

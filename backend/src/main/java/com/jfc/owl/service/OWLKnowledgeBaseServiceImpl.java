@@ -74,6 +74,9 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 
 	@Autowired
 	private HydraulicCylinderOntology hydraulicCylinderOntology;
+	
+	@Autowired
+	private SimilaritySearchCache similaritySearchCache;
 
 	// 內存中的OWL模型緩存，提高訪問速度
 	// Memory cache for OWL models
@@ -565,39 +568,52 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		List<Map<String, Object>> similarBOMs = new ArrayList<>();
 
 		try {
-			// 從知識庫中查詢活躍的OWL檔案
-			List<OWLKnowledgeBase> activeKnowledgeBases = knowledgeBaseRepository.findByActiveTrue();
+			// First, filter BOMs that might be relevant based on metadata
+	        List<OWLKnowledgeBase> candidateBOMs = filterCandidateBOMs(specifications);
+	        logger.info("Found {} candidate BOMs for similarity calculation", candidateBOMs.size());
+	        
+	        // Use a larger thread pool for better parallelization
+	        int threadCount = Math.min(candidateBOMs.size(), 8);
+	        ExecutorService searchExecutor = Executors.newFixedThreadPool(threadCount);
+	        List<Future<Map<String, Object>>> futures = new ArrayList<>();
 
-			// Use parallel processing for similarity calculation
-			List<Future<Map<String, Object>>> futures = new ArrayList<>();
-			ExecutorService searchExecutor = Executors.newFixedThreadPool(4);
-
-			for (OWLKnowledgeBase kb : activeKnowledgeBases) {
+			for (OWLKnowledgeBase kb : candidateBOMs) {
 				Future<Map<String, Object>> future = searchExecutor.submit(() -> {
 					try {
-						OntModel model = getKnowledgeBaseModel(kb.getMasterItemCode());
-						if (model != null) {
-							double similarity = calculateSimilarityScore(model, specifications, kb);
-
-							if (similarity > 0.3) { // 30%以上相似度
-								Map<String, Object> similarBOM = new HashMap<>();
-								similarBOM.put("masterItemCode", kb.getMasterItemCode());
-								similarBOM.put("fileName", kb.getFileName());
-								similarBOM.put("description", kb.getDescription());
-								similarBOM.put("similarityScore", Math.round(similarity * 100.0) / 100.0);
-								similarBOM.put("createdAt", kb.getCreatedAt());
-								similarBOM.put("tripleCount", kb.getTripleCount());
-								similarBOM.put("isHydraulicCylinder", kb.getIsHydraulicCylinder());
-
-								if (kb.getIsHydraulicCylinder() != null && kb.getIsHydraulicCylinder()) {
-									similarBOM.put("hydraulicCylinderSpecs", kb.getHydraulicCylinderSpecs());
-								}
-
-								return similarBOM;
-							}
-						}
+						// Quick similarity check first (without loading full model)
+	                    double quickScore = calculateQuickSimilarity(specifications, kb);
+	                    
+	                    if (quickScore < 0.2) {
+	                        return null; // Skip if quick score is too low
+	                    }
+	                    
+	                    // Only load model for promising candidates
+	                    double detailedScore = quickScore;
+	                    if (quickScore > 0.5) {
+	                        OntModel model = getCachedModel(kb.getMasterItemCode());
+	                        if (model != null) {
+	                            detailedScore = calculateDetailedSimilarity(model, specifications, kb);
+	                        }
+	                    }
+	                    
+	                    if (detailedScore > 0.3) {
+	                        Map<String, Object> similarBOM = new HashMap<>();
+	                        similarBOM.put("masterItemCode", kb.getMasterItemCode());
+	                        similarBOM.put("fileName", kb.getFileName());
+	                        similarBOM.put("description", kb.getDescription());
+	                        similarBOM.put("similarityScore", Math.round(detailedScore * 100.0));
+	                        similarBOM.put("createdAt", kb.getCreatedAt());
+	                        similarBOM.put("tripleCount", kb.getTripleCount());
+	                        similarBOM.put("isHydraulicCylinder", kb.getIsHydraulicCylinder());
+	                        
+	                        if (kb.getIsHydraulicCylinder() != null && kb.getIsHydraulicCylinder()) {
+	                            similarBOM.put("hydraulicCylinderSpecs", kb.getHydraulicCylinderSpecs());
+	                        }
+	                        
+	                        return similarBOM;
+	                    }
 					} catch (Exception e) {
-						logger.warn("Error processing knowledge base entry: {}", kb.getMasterItemCode(), e);
+						logger.warn("Error processing KB entry {}: {}", kb.getMasterItemCode(), e.getMessage());
 					}
 					return null;
 				});
@@ -605,23 +621,38 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 				futures.add(future);
 			}
 
-			// Collect results with timeout
-			for (Future<Map<String, Object>> future : futures) {
-				try {
-					Map<String, Object> result = future.get(5, TimeUnit.SECONDS);
-					if (result != null) {
-						similarBOMs.add(result);
-					}
-				} catch (TimeoutException e) {
-					logger.warn("Timeout calculating similarity for a BOM");
-				} catch (Exception e) {
-					logger.warn("Error getting similarity result", e);
-				}
-			}
+			// Collect results with longer timeout
+	        long startTime = System.currentTimeMillis();
+	        int completed = 0;
+	        
+	        for (Future<Map<String, Object>> future : futures) {
+	            try {
+	                // Dynamic timeout based on remaining time
+	                long elapsed = System.currentTimeMillis() - startTime;
+	                long remainingTimeout = Math.max(2000, 30000 - elapsed); // At least 2 seconds, max 30 seconds total
+	                
+	                Map<String, Object> result = future.get(remainingTimeout, TimeUnit.MILLISECONDS);
+	                if (result != null) {
+	                    similarBOMs.add(result);
+	                }
+	                completed++;
+	                
+	                // Log progress every 10 items
+	                if (completed % 10 == 0) {
+	                    logger.debug("Similarity search progress: {}/{} completed", completed, futures.size());
+	                }
+	                
+	            } catch (TimeoutException e) {
+	                logger.debug("Timeout calculating similarity for a BOM (completed: {}/{})", completed, futures.size());
+	                future.cancel(true);
+	            } catch (Exception e) {
+	                logger.debug("Error getting similarity result: {}", e.getMessage());
+	            }
+	        }
 
 			searchExecutor.shutdown();
 
-			// 按相似度排序
+			// Sort by similarity score
 			similarBOMs.sort(
 					(a, b) -> Double.compare((Double) b.get("similarityScore"), (Double) a.get("similarityScore")));
 
@@ -630,13 +661,31 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 				similarBOMs = similarBOMs.subList(0, 20);
 			}
 
-			logger.info("Found {} similar BOMs", similarBOMs.size());
+			logger.info("Found {} similar BOMs (processed {} candidates)", similarBOMs.size(), candidateBOMs.size());
 		} catch (Exception e) {
 			logger.error("Error searching similar BOMs", e);
 		}
 
 		return similarBOMs;
 	}
+	
+	// Modified searchSimilarBOMs method to use cache
+		public List<Map<String, Object>> searchSimilarBOMsWithCache(Map<String, String> specifications) {
+			// Check cache first
+			List<Map<String, Object>> cachedResults = similaritySearchCache.getCachedSearchResults(specifications);
+			if (cachedResults != null) {
+				logger.info("Returning cached search results for specifications: {}", specifications);
+				return cachedResults;
+			}
+
+			// Perform search
+			List<Map<String, Object>> results = searchSimilarBOMs(specifications);
+
+			// Cache results
+			similaritySearchCache.cacheSearchResults(specifications, results);
+
+			return results;
+		}
 
 	/**
 	 * Search similar hydraulic cylinders specifically
@@ -2238,6 +2287,37 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 	    
 	    return result;
 	}
+	
+	/**
+	 * Preload models for better performance
+	 */
+	public void preloadFrequentlyUsedModels() {
+	    logger.info("Preloading frequently used models");
+	    
+	    try {
+	        // Get top used BOMs
+	        List<OWLKnowledgeBase> topBOMs = knowledgeBaseRepository.findByActiveTrue().stream()
+	            .filter(kb -> kb.getQualityScore() != null && kb.getQualityScore() > 0.7)
+	            .limit(50)
+	            .collect(Collectors.toList());
+	        
+	        // Preload in background
+	        executorService.submit(() -> {
+	            for (OWLKnowledgeBase kb : topBOMs) {
+	                try {
+	                    getKnowledgeBaseModel(kb.getMasterItemCode());
+	                    Thread.sleep(100); // Avoid overwhelming the system
+	                } catch (Exception e) {
+	                    logger.debug("Error preloading model: {}", kb.getMasterItemCode());
+	                }
+	            }
+	            logger.info("Preloading completed");
+	        });
+	        
+	    } catch (Exception e) {
+	        logger.error("Error during preloading", e);
+	    }
+	}
 
 	// 為了支援批次控制，需要修改批次處理邏輯
 	// 在 exportAllBOMsToKnowledgeBase 方法中添加狀態檢查：
@@ -2255,6 +2335,7 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 	        return false;
 	    }
 	}
+	
 
 	// 在批次處理循環中使用：
 	// if (!shouldContinueProcessing(batchId)) {
@@ -2373,5 +2454,96 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 	                    skippedCount, hydraulicCylinderCount));
 	    
 	    return result;
+	}
+	
+	/**
+	 * Filter candidate BOMs based on quick criteria
+	 */
+	private List<OWLKnowledgeBase> filterCandidateBOMs(Map<String, String> specifications) {
+	    List<OWLKnowledgeBase> allActive = knowledgeBaseRepository.findByActiveTrue();
+	    
+	    // If specifications contain hydraulic cylinder info, prioritize those
+	    if (specifications.containsKey("series") || specifications.containsKey("bore")) {
+	        return allActive.stream()
+	            .filter(kb -> {
+	                // Prioritize hydraulic cylinders
+	                if (kb.getIsHydraulicCylinder() != null && kb.getIsHydraulicCylinder()) {
+	                    return true;
+	                }
+	                // Include items that might be hydraulic cylinders based on code
+	                return isHydraulicCylinderItem(kb.getMasterItemCode());
+	            })
+	            .collect(Collectors.toList());
+	    }
+	    
+	    return allActive;
+	}
+
+	/**
+	 * Calculate quick similarity without loading the full OWL model
+	 */
+	private double calculateQuickSimilarity(Map<String, String> specifications, OWLKnowledgeBase kb) {
+	    double score = 0.0;
+	    
+	    // Check if both are hydraulic cylinders
+	    if (kb.getIsHydraulicCylinder() != null && kb.getIsHydraulicCylinder() 
+	        && specifications.containsKey("series")) {
+	        
+	        // Use the existing method but with parsed specs
+	        return calculateHydraulicCylinderSimilarity(specifications, kb);
+	    }
+	    
+	    // Basic scoring based on metadata
+	    if (kb.getMasterItemCode() != null && specifications.containsKey("itemCode")) {
+	        String targetCode = specifications.get("itemCode");
+	        String kbCode = kb.getMasterItemCode();
+	        
+	        // Check prefix similarity
+	        if (targetCode.length() >= 2 && kbCode.length() >= 2) {
+	            if (targetCode.substring(0, 2).equals(kbCode.substring(0, 2))) {
+	                score += 0.3;
+	            }
+	        }
+	        
+	        // Check series similarity for items starting with 3 or 4
+	        if (targetCode.length() >= 4 && kbCode.length() >= 4) {
+	            if (targetCode.substring(2, 4).equals(kbCode.substring(2, 4))) {
+	                score += 0.2;
+	            }
+	        }
+	    }
+	    
+	    return score;
+	}
+
+	/**
+	 * Calculate detailed similarity with the loaded model
+	 */
+	private double calculateDetailedSimilarity(OntModel model, Map<String, String> specifications, OWLKnowledgeBase kb) {
+	    // Use the existing calculateSimilarityScore method
+	    return calculateSimilarityScore(model, specifications, kb);
+	}
+
+	/**
+	 * Get cached model with lazy loading
+	 */
+	private OntModel getCachedModel(String masterItemCode) {
+	    try {
+	        // Check cache first
+	        if (modelCache.containsKey(masterItemCode)) {
+	            return modelCache.get(masterItemCode);
+	        }
+	        
+	        // Try to load with timeout
+	        Future<OntModel> future = executorService.submit(() -> getKnowledgeBaseModel(masterItemCode));
+	        return future.get(3, TimeUnit.SECONDS);
+	        
+	    } catch (TimeoutException e) {
+	        logger.debug("Timeout loading model for: {}", masterItemCode);
+	        return null;
+	    } catch (Exception e) {
+	        logger.debug("Error loading model for: {}", masterItemCode);
+	        return null;
+	    }
 	}
 }

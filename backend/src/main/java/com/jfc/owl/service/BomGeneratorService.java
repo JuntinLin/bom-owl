@@ -30,15 +30,11 @@ public class BomGeneratorService {
     @Autowired
     private BomOwlExportService bomOwlExportService;
     
-    @Autowired
-    private ReasoningService reasoningService;
-    
+        
     @Autowired
     private EnhancedHydraulicCylinderRules hydraulicCylinderRules;
     
-    @Autowired 
-    private DatabaseSimilarityService databaseSimilarityService;
-    
+        
     @Autowired
     private ImaRepository imaRepository;
     

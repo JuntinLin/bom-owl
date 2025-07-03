@@ -1,5 +1,6 @@
 // src/pages/KnowledgeBaseManagement.tsx
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Add this import
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,12 +22,10 @@ import { toast } from 'sonner';
 // Icons
 import {
   Database,
-  Download,
   Upload,
   Search,
   RefreshCw,
   Trash2,
-  FileText,
   BarChart3,
   Settings,
   CheckCircle,
@@ -34,9 +33,12 @@ import {
   HardDrive,
   Layers,
   Brain,
-  Zap, Loader2,Pause,
+  Zap,
+  Loader2,
+  Pause,
   Play,
   X,
+  ArrowRight,
 } from 'lucide-react';
 
 // Import service and types
@@ -49,7 +51,7 @@ import knowledgeBaseService, {
   type ProcessingLog
 } from '@/services/knowledgeBaseService';
 
-// Utility functions
+// Utility functions (keep all the existing utility functions)
 const formatFileSize = (bytes: number): string => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   if (bytes === 0) return '0 Bytes';
@@ -95,11 +97,11 @@ const getStatusVariant = (status: string): "default" | "secondary" | "destructiv
 
 // Main Component
 const KnowledgeBaseManagement = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<KnowledgeBaseStats | null>(null);
-  const [searchResults, setSearchResults] = useState<KnowledgeBaseEntry[]>([]);
   
   // Export states
   const [exportLoading, setExportLoading] = useState(false);
@@ -112,10 +114,6 @@ const KnowledgeBaseManagement = () => {
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [batchHistory, setBatchHistory] = useState<ProcessingLog[]>([]);
   const [isPolling, setIsPolling] = useState(false);
-  
-  // Search states
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [searchLoading, setSearchLoading] = useState(false);
   
   // Single export form states
   const [singleExportForm, setSingleExportForm] = useState({
@@ -131,7 +129,7 @@ const KnowledgeBaseManagement = () => {
     loadBatchHistory();
   }, []);
 
-  // Polling for batch progress
+  // Polling for batch progress (keep existing polling logic)
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     
@@ -166,6 +164,7 @@ const KnowledgeBaseManagement = () => {
     };
   }, [isPolling, batchId]);
 
+  // Keep all existing functions
   const loadStatistics = async () => {
     try {
       setLoading(true);
@@ -198,6 +197,10 @@ const KnowledgeBaseManagement = () => {
       setBatchHistory(history);
     } catch (err) {
       console.error('Failed to load batch history:', err);
+      // Set empty array to prevent UI issues
+      setBatchHistory([]);
+      // Don't show error toast on initial load to avoid confusing users
+      // The batch history is optional functionality
     }
   };
 
@@ -318,28 +321,6 @@ const KnowledgeBaseManagement = () => {
       toast.error('Failed to cancel batch export');
     }
   };
-  const handleSearch = async () => {
-    if (!searchKeyword.trim()) {
-      toast.error('Please enter a search keyword');
-      return;
-    }
-
-    try {
-      setSearchLoading(true);
-      const results = await knowledgeBaseService.searchKnowledgeBase(searchKeyword);
-      setSearchResults(results);
-
-      if (results.length === 0) {
-        toast.info('No results found');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to search knowledge base';
-      toast.error(errorMessage);
-      console.error('Error searching:', err);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
 
   const handleCleanup = async () => {
     try {
@@ -353,17 +334,6 @@ const KnowledgeBaseManagement = () => {
       console.error('Error cleaning up:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDownload = async (masterItemCode: string, format: string) => {
-    try {
-      await knowledgeBaseService.downloadOWLFile(masterItemCode, format);
-      toast.success('Download started');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to download file';
-      toast.error(errorMessage);
-      console.error('Error downloading:', err);
     }
   };
 
@@ -390,6 +360,10 @@ const KnowledgeBaseManagement = () => {
           <p className="text-gray-600">Manage OWL files for intelligent BOM generation</p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => navigate('/knowledge-base/search')} variant="outline">
+            <Search className="h-4 w-4 mr-2" />
+            Search KB
+          </Button>
           <Button onClick={loadStatistics} variant="outline" disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -409,7 +383,7 @@ const KnowledgeBaseManagement = () => {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-3 w-full max-w-lg">
           <TabsTrigger value="overview">
             <BarChart3 className="h-4 w-4 mr-2" />
             Overview
@@ -418,138 +392,174 @@ const KnowledgeBaseManagement = () => {
             <Upload className="h-4 w-4 mr-2" />
             Export
           </TabsTrigger>
-          <TabsTrigger value="search">
-            <Search className="h-4 w-4 mr-2" />
-            Search
-          </TabsTrigger>
           <TabsTrigger value="maintenance">
             <Settings className="h-4 w-4 mr-2" />
             Maintenance
           </TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
+        {/* Overview Tab - Keep as is */}
         <TabsContent value="overview" className="mt-6">
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-blue-100 rounded-full mr-4">
-                      <Database className="w-6 h-6 text-blue-600" />
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-blue-100 rounded-full mr-4">
+                        <Database className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-sm font-medium">Total Entries</p>
+                        <p className="text-2xl font-bold">{formatNumber(stats.totalEntries)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-500 text-sm font-medium">Total Entries</p>
-                      <p className="text-2xl font-bold">{formatNumber(stats.totalEntries)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-green-100 rounded-full mr-4">
-                      <HardDrive className="w-6 h-6 text-green-600" />
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-green-100 rounded-full mr-4">
+                        <HardDrive className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-sm font-medium">Total Size</p>
+                        <p className="text-2xl font-bold">{formatFileSize(stats.totalFileSize)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-500 text-sm font-medium">Total Size</p>
-                      <p className="text-2xl font-bold">{formatFileSize(stats.totalFileSize)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-purple-100 rounded-full mr-4">
-                      <Layers className="w-6 h-6 text-purple-600" />
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-purple-100 rounded-full mr-4">
+                        <Layers className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-sm font-medium">Total Triples</p>
+                        <p className="text-2xl font-bold">{formatNumber(stats.totalTriples)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-500 text-sm font-medium">Total Triples</p>
-                      <p className="text-2xl font-bold">{formatNumber(stats.totalTriples)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center">
-                    <div className="p-3 bg-yellow-100 rounded-full mr-4">
-                      <Brain className="w-6 h-6 text-yellow-600" />
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-yellow-100 rounded-full mr-4">
+                        <Brain className="w-6 h-6 text-yellow-600" />
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-sm font-medium">Hydraulic Cylinders</p>
+                        <p className="text-2xl font-bold">{stats.hydraulicCylinderCount}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-500 text-sm font-medium">Cache Size</p>
-                      <p className="text-2xl font-bold">{stats.cacheSize}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Format Distribution */}
-          {stats && stats.formatDistribution && Object.keys(stats.formatDistribution).length > 0 && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Format Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(stats.formatDistribution).map(([format, count]) => (
-                    <div key={format} className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">{count}</div>
-                      <div className="text-sm text-gray-600">{format}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* System Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle>System Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Knowledge Base Status</span>
-                  <Badge variant="default" className="bg-green-100 text-green-800">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Active
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Last Master Update</span>
-                  <span className="text-sm text-gray-600">
-                    {stats?.lastMasterUpdate ? new Date(stats.lastMasterUpdate).toLocaleString() : 'Never'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Cache Performance</span>
-                  <Badge variant="outline" className="text-blue-600">
-                    <Zap className="w-3 h-3 mr-1" />
-                    Optimized
-                  </Badge>
-                </div>
-                {stats?.hydraulicCylinderCount !== undefined && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Hydraulic Cylinders</span>
-                    <span className="text-sm text-gray-600">
-                      {stats.hydraulicCylinderCount} ({stats.hydraulicCylinderPercentage?.toFixed(1)}%)
-                    </span>
-                  </div>
-                )}
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
+
+              {/* Format Distribution */}
+              {stats.formatDistribution && Object.keys(stats.formatDistribution).length > 0 && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle>Format Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {Object.entries(stats.formatDistribution).map(([format, count]) => (
+                        <div key={format} className="text-center p-4 bg-gray-50 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{count}</div>
+                          <div className="text-sm text-gray-600">{format}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Quick Actions Card */}
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Button 
+                      variant="outline" 
+                      className="justify-start" 
+                      onClick={() => navigate('/knowledge-base/search')}
+                    >
+                      <Search className="h-4 w-4 mr-2" />
+                      Search Knowledge Base
+                      <ArrowRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="justify-start" 
+                      onClick={() => setActiveTab('export')}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Export BOMs
+                      <ArrowRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="justify-start" 
+                      onClick={() => navigate('/bom-generator')}
+                    >
+                      <Layers className="h-4 w-4 mr-2" />
+                      Generate New BOM
+                      <ArrowRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* System Status */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>System Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Knowledge Base Status</span>
+                      <Badge variant="default" className="bg-green-100 text-green-800">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Active
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Last Master Update</span>
+                      <span className="text-sm text-gray-600">
+                        {stats?.lastMasterUpdate ? new Date(stats.lastMasterUpdate).toLocaleString() : 'Never'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Cache Performance</span>
+                      <Badge variant="outline" className="text-blue-600">
+                        <Zap className="w-3 h-3 mr-1" />
+                        Optimized
+                      </Badge>
+                    </div>
+                    {stats?.hydraulicCylinderPercentage !== undefined && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Hydraulic Cylinder Coverage</span>
+                        <span className="text-sm text-gray-600">
+                          {stats.hydraulicCylinderPercentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
-        {/* Export Tab */}
+        {/* Export Tab - Keep as is */}
         <TabsContent value="export" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Single Export */}
@@ -626,7 +636,7 @@ const KnowledgeBaseManagement = () => {
                   >
                     {exportLoading ? (
                       <>
-                        <Loader2  className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Exporting...
                       </>
                     ) : (
@@ -640,7 +650,7 @@ const KnowledgeBaseManagement = () => {
               </CardContent>
             </Card>
 
-            {/* Enhanced Batch Export */}
+            {/* Batch Export - Keep existing batch export card */}
             <Card>
               <CardHeader>
                 <CardTitle>Batch Export All BOMs</CardTitle>
@@ -655,7 +665,7 @@ const KnowledgeBaseManagement = () => {
                     </AlertDescription>
                   </Alert>
                   
-                  {/* Batch Progress */}
+                  {/* Keep all existing batch progress and control code */}
                   {(exportLoading || batchStatus === 'processing' || batchStatus === 'paused') && batchProgress && (
                     <div className="space-y-4">
                       <div className="flex justify-between text-sm">
@@ -749,7 +759,7 @@ const KnowledgeBaseManagement = () => {
                     >
                       {exportLoading ? (
                         <>
-                          <Loader2  className="mr-2 h-4 w-4 animate-spin" />
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Starting Batch Export...
                         </>
                       ) : (
@@ -809,104 +819,7 @@ const KnowledgeBaseManagement = () => {
           </div>
         </TabsContent>
 
-        {/* Search Tab */}
-        <TabsContent value="search" className="mt-6">
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Search Knowledge Base</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Input
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
-                  placeholder="Search by item code, description, or tags..."
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
-                <Button onClick={handleSearch} disabled={searchLoading}>
-                  {searchLoading ? (
-                    <Loader2  className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              
-              {searchResults.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-sm text-gray-600 mb-4">
-                    Found {searchResults.length} result(s)
-                  </p>
-                  
-                  <div className="space-y-4">
-                    {searchResults.map((entry) => (
-                      <Card key={entry.id} className="border-l-4 border-l-blue-500">
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 className="font-medium">{entry.masterItemCode}</h4>
-                              <p className="text-sm text-gray-600">{entry.description}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <Badge variant={entry.active ? "default" : "secondary"}>
-                                {entry.active ? "Active" : "Inactive"}
-                              </Badge>
-                              <Badge variant="outline">{entry.format}</Badge>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">File Size:</span>
-                              <div className="font-medium">{formatFileSize(entry.fileSize)}</div>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Triples:</span>
-                              <div className="font-medium">{formatNumber(entry.tripleCount)}</div>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Usage:</span>
-                              <div className="font-medium">{entry.usageCount} times</div>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Created:</span>
-                              <div className="font-medium">
-                                {new Date(entry.createdAt).toLocaleDateString()}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex justify-between items-center mt-3">
-                            <div className="flex items-center text-sm text-gray-500">
-                              <Clock className="w-4 h-4 mr-1" />
-                              {entry.includeHierarchy ? "Complete Hierarchy" : "Direct Components Only"}
-                            </div>
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleDownload(entry.masterItemCode, entry.format)}
-                              >
-                                <Download className="w-4 h-4 mr-1" />
-                                Download
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                <FileText className="w-4 h-4 mr-1" />
-                                View Details
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Maintenance Tab */}
+        {/* Maintenance Tab - Keep as is */}
         <TabsContent value="maintenance" className="mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Cleanup Operations */}
@@ -931,7 +844,7 @@ const KnowledgeBaseManagement = () => {
                   >
                     {loading ? (
                       <>
-                        <Loader2  className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Cleaning up...
                       </>
                     ) : (
@@ -960,11 +873,15 @@ const KnowledgeBaseManagement = () => {
                   </div>
                   
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Cache Hit Rate</span>
-                    <Badge variant="outline" className="text-green-600">
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      95%
-                    </Badge>
+                    <span className="text-sm font-medium">Search Performance</span>
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      onClick={() => navigate('/knowledge-base/search?tab=cache')}
+                    >
+                      View Cache Stats
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -1004,6 +921,15 @@ const KnowledgeBaseManagement = () => {
                     <span className="text-sm">Preload frequently used models</span>
                     <Switch defaultChecked />
                   </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={() => navigate('/knowledge-base/search?tab=cache')}
+                  >
+                    Manage Cache Settings
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
                 </div>
                 
                 <div className="space-y-4">

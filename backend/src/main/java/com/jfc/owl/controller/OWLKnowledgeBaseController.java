@@ -3,6 +3,7 @@ package com.jfc.owl.controller;
 
 import com.jfc.owl.entity.OWLKnowledgeBase;
 import com.jfc.owl.entity.ProcessingLog;
+import com.jfc.owl.dto.ProcessingLogDTO;
 import com.jfc.owl.repository.ProcessingLogRepository;
 import com.jfc.owl.service.OWLKnowledgeBaseService;
 import com.jfc.rdb.common.dto.AbstractDTOController;
@@ -10,19 +11,24 @@ import com.jfc.rdb.common.dto.ApiResponse;
 import com.jfc.rdb.tiptop.entity.ImaFile;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * OWL知識庫管理控制器
- */
+* OWL知識庫管理控制器
+*/
 @RestController
 @RequestMapping("/owl-knowledge-base")
 public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
@@ -86,21 +92,6 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 		} catch (Exception e) {
 			logger.error("Error batch exporting to knowledge base", e);
 			return error("Failed to batch export to knowledge base: " + e.getMessage());
-		}
-	}
-
-	/**
-	 * 搜索相似BOM用於新產品生成
-	 */
-	@PostMapping("/search-similar")
-	public ResponseEntity<ApiResponse<List<Map<String, Object>>>> searchSimilarBOMs(
-			@RequestBody Map<String, String> specifications) {
-		try {
-			List<Map<String, Object>> similarBOMs = knowledgeBaseService.searchSimilarBOMs(specifications);
-			return success(similarBOMs);
-		} catch (Exception e) {
-			logger.error("Error searching similar BOMs", e);
-			return error("Failed to search similar BOMs: " + e.getMessage());
 		}
 	}
 
@@ -178,41 +169,29 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 	}
 
 	/**
-	 * 獲取批次處理進度
+	 * 獲取批次處理進度 - 使用 DTO
 	 */
 	@GetMapping("/batch-progress/{batchId}")
-	public ResponseEntity<ApiResponse<Map<String, Object>>> getBatchProgress(@PathVariable String batchId) {
+	public ResponseEntity<ApiResponse<ProcessingLogDTO>> getBatchProgress(@PathVariable String batchId) {
 		try {
 			ProcessingLog log = processingLogRepository.findByBatchId(batchId).orElse(null);
 			if (log == null) {
 				return error("Batch not found: " + batchId);
 			}
 
-			Map<String, Object> progress = new HashMap<>();
-			progress.put("batchId", log.getBatchId());
-			progress.put("totalItems", log.getTotalItems());
-			progress.put("processedItems", log.getProcessedItems());
-			progress.put("successCount", log.getSuccessCount());
-			progress.put("failureCount", log.getFailureCount());
-			progress.put("status", log.getStatus());
-			progress.put("startTime", log.getStartTime());
-			progress.put("endTime", log.getEndTime());
-
-			// 計算進度百分比
-			if (log.getTotalItems() > 0) {
-				progress.put("progressPercentage", (log.getProcessedItems() * 100.0) / log.getTotalItems());
-			}
-
-			// 估算剩餘時間
-			if ("PROCESSING".equals(log.getStatus()) && log.getProcessedItems() > 0) {
+			// 轉換為 DTO
+			ProcessingLogDTO dto = ProcessingLogDTO.fromEntity(log);
+			
+			// 額外的進度計算（如果需要即時計算）
+			if ("PROCESSING".equals(log.getStatus().name()) && log.getProcessedItems() > 0) {
 				long elapsedSeconds = java.time.Duration.between(log.getStartTime(), LocalDateTime.now()).getSeconds();
 				double avgSecondsPerItem = elapsedSeconds / (double) log.getProcessedItems();
 				int remainingItems = log.getTotalItems() - log.getProcessedItems();
 				long estimatedRemainingSeconds = (long) (remainingItems * avgSecondsPerItem);
-				progress.put("estimatedRemainingSeconds", estimatedRemainingSeconds);
+				// 可以在 DTO 中添加這個欄位
 			}
 
-			return success(progress);
+			return success(dto);
 		} catch (Exception e) {
 			logger.error("Error getting batch progress", e);
 			return error("Failed to get batch progress: " + e.getMessage());
@@ -225,7 +204,6 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 	@PostMapping("/resume-batch/{batchId}")
 	public ResponseEntity<ApiResponse<Map<String, Object>>> resumeBatch(@PathVariable String batchId) {
 		try {
-			// 實現繼續處理邏輯
 			Map<String, Object> result = knowledgeBaseService.resumeBatchExport(batchId);
 			return success(result);
 		} catch (Exception e) {
@@ -263,17 +241,86 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 	}
 
 	/**
-	 * 獲取所有批次處理記錄
+	 * 獲取所有批次處理記錄 - 使用 DTO 避免懶加載問題
 	 */
 	@GetMapping("/batch-history")
-	public ResponseEntity<ApiResponse<List<ProcessingLog>>> getBatchHistory(
+	public ResponseEntity<ApiResponse<List<ProcessingLogDTO>>> getBatchHistory(
 			@RequestParam(defaultValue = "10") int limit) {
 		try {
-			List<ProcessingLog> history = processingLogRepository.findTop10ByOrderByStartTimeDesc();
-			return success(history);
+			logger.info("Fetching batch history with limit: {}", limit);
+
+			List<ProcessingLog> history = new ArrayList<>();
+			
+			try {
+				// 嘗試使用 Spring Data JPA 方法
+				history = processingLogRepository.findTop10ByOrderByStartTimeDesc();
+				logger.info("Successfully fetched {} batch history records using findTop10 method", history.size());
+			} catch (Exception e1) {
+				// 如果失敗，嘗試使用 Pageable
+				logger.warn("findTop10 method failed, trying with Pageable: {}", e1.getMessage());
+				try {
+					Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "startTime"));
+					history = processingLogRepository.findAll(pageable).getContent();
+					logger.info("Successfully fetched {} batch history records using Pageable", history.size());
+				} catch (Exception e2) {
+					// 如果都失敗，使用 findAll 並在記憶體中限制
+					logger.warn("Pageable method failed, trying findAll: {}", e2.getMessage());
+					try {
+						List<ProcessingLog> allLogs = processingLogRepository.findAll(
+							Sort.by(Sort.Direction.DESC, "startTime")
+						);
+						if (allLogs != null && !allLogs.isEmpty()) {
+							history = allLogs.stream()
+								.limit(limit)
+								.collect(Collectors.toList());
+						}
+						logger.info("Successfully fetched {} batch history records using findAll", history.size());
+					} catch (Exception e3) {
+						logger.error("All methods failed, returning empty list: {}", e3.getMessage());
+						history = new ArrayList<>();
+					}
+				}
+			}
+			
+			// 確保不返回 null
+			if (history == null) {
+				history = new ArrayList<>();
+			}
+			
+			// 轉換為 DTO 列表，避免懶加載問題
+			List<ProcessingLogDTO> dtoList = history.stream()
+				.map(log -> {
+					try {
+						// 確保必要欄位不為 null
+						if (log.getTotalItems() == null) log.setTotalItems(0);
+						if (log.getProcessedItems() == null) log.setProcessedItems(0);
+						if (log.getSuccessCount() == null) log.setSuccessCount(0);
+						if (log.getFailureCount() == null) log.setFailureCount(0);
+						if (log.getSkippedCount() == null) log.setSkippedCount(0);
+						if (log.getTotalFileSize() == null) log.setTotalFileSize(0L);
+						if (log.getTotalTripleCount() == null) log.setTotalTripleCount(0L);
+						
+						// 轉換為 DTO
+						return ProcessingLogDTO.fromEntity(log);
+					} catch (Exception e) {
+						logger.error("Error converting ProcessingLog to DTO: {}", e.getMessage());
+						// 返回一個基本的 DTO 以避免整個請求失敗
+						ProcessingLogDTO errorDto = new ProcessingLogDTO();
+						errorDto.setBatchId(log.getBatchId());
+						errorDto.setStatus("ERROR");
+						errorDto.setNotes("Error converting entity to DTO");
+						return errorDto;
+					}
+				})
+				.filter(dto -> dto != null)  // 過濾掉任何 null 值
+				.collect(Collectors.toList());
+			
+			logger.info("Returning {} batch history DTOs", dtoList.size());
+			return success(dtoList);
 		} catch (Exception e) {
 			logger.error("Error getting batch history", e);
-			return error("Failed to get batch history: " + e.getMessage());
+			// 返回空列表而不是錯誤，以避免前端崩潰
+			return success(new ArrayList<ProcessingLogDTO>());
 		}
 	}
 }
