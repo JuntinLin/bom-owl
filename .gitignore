@@ -6,6 +6,7 @@ backend/.settings/
 backend/bin/
 backend/*.log
 backend/logs/
+backend/heap_dumps
 
 # Frontend (React) exclusions
 frontend/node_modules/
