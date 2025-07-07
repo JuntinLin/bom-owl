@@ -1,6 +1,6 @@
 // src/services/knowledgeBaseSearchService.ts
 
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, CancelTokenSource } from 'axios';
 import axiosRetry from 'axios-retry';
 import createAxiosWithInterceptors from '@/utils/axiosInterceptor';
 import { ApiResponse } from '@/types/tiptop';
@@ -8,9 +8,7 @@ import { ApiResponse } from '@/types/tiptop';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/owl';
 const BASE_URL = '/knowledge-base-search';
 
-// Types matching backend DTOs
-
-// SearchRequestDTO.java
+// Types matching backend DTOs (保持不變)
 export interface SearchRequestDTO {
   specifications: Record<string, string>;
   options?: SearchOptions;
@@ -52,7 +50,6 @@ export enum SortOrder {
   USAGE_ASC = 'USAGE_ASC'
 }
 
-// SearchResultDTO.java
 export interface SearchResultDTO {
   searchId: string;
   status: SearchStatus;
@@ -88,7 +85,6 @@ export interface SearchConfiguration {
   additionalParams?: Record<string, any>;
 }
 
-// SimilarBOMDTO.java
 export interface SimilarBOMDTO {
   masterItemCode: string;
   fileName: string;
@@ -121,7 +117,6 @@ export interface HydraulicCylinderSpecs {
   shaftEndJoin?: string;
 }
 
-// SearchProgressDTO.java
 export interface SearchProgressDTO {
   totalItems: number;
   processedItems: number;
@@ -147,7 +142,6 @@ export enum ProcessingPhase {
   FINALIZING = 'FINALIZING'
 }
 
-// BatchSearchRequestDTO.java
 export interface BatchSearchRequestDTO {
   searchItems: SearchItem[];
   commonOptions?: SearchOptions;
@@ -162,7 +156,6 @@ export interface SearchItem {
   tags?: string[];
 }
 
-// BatchSearchResponseDTO.java
 export interface BatchSearchResponseDTO {
   batchId: string;
   status: BatchStatus;
@@ -200,7 +193,6 @@ export interface BatchSearchSummary {
   resultsByTag?: Record<string, number>;
 }
 
-// BatchSearchStatusDTO.java
 export interface BatchSearchStatusDTO {
   batchId: string;
   status: BatchStatus;
@@ -220,7 +212,6 @@ export interface BatchProgress {
   estimatedRemainingMs?: number;
 }
 
-// SearchResponseWrapper.java
 export interface SearchResponseWrapper<T> {
   status: ResponseStatus;
   message: string;
@@ -264,7 +255,6 @@ export interface ErrorDetails {
   traceId?: string;
 }
 
-// Cache statistics types
 export interface CacheStatsDTO {
   statistics: CacheStatistics;
   sizes: Record<string, number>;
@@ -279,21 +269,28 @@ export interface CacheStatistics {
   totalCacheSize: number;
 }
 
-// Create axios instance with interceptors
-const searchApi = createAxiosWithInterceptors(API_BASE_URL);
-searchApi.defaults.timeout = 60000; // 60 seconds
+export interface SearchRetryOptions {
+  maxRetries?: number;
+  progressiveTimeout?: boolean;
+  fallbackToAsync?: boolean;
+  reduceScope?: boolean;
+}
 
-// Configure retry mechanism
+// Create axios instance with NO timeout (0 = no timeout)
+const searchApi = createAxiosWithInterceptors(API_BASE_URL);
+searchApi.defaults.timeout = 0; // 無超時限制
+
+// Configure retry mechanism - 移除超時相關的重試條件
 axiosRetry(searchApi, {
   retries: 3,
   retryDelay: (retryCount) => retryCount * 2000,
   retryCondition: (error: AxiosError) => {
-    return axiosRetry.isNetworkOrIdempotentRequestError(error) ||
-      error.code === 'ECONNABORTED';
+    // 只在網路錯誤時重試，不在超時時重試
+    return axiosRetry.isNetworkError(error) && error.code !== 'ECONNABORTED';
   }
 });
 
-// Error handling
+// Error handling - 移除超時相關的錯誤處理
 const handleApiError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError;
@@ -311,17 +308,11 @@ const handleApiError = (error: unknown) => {
           throw new Error('Invalid search parameters');
         case 404:
           throw new Error('Search resource not found');
-        case 408:
-          throw new Error('Search request timeout');
         case 500:
           throw new Error('Search service error');
         default:
           throw new Error(`Search failed (${axiosError.response.status})`);
       }
-    }
-    
-    if (axiosError.code === 'ECONNABORTED') {
-      throw new Error('Search operation timeout. Try reducing the search scope.');
     }
     
     if (axiosError.request) {
@@ -336,14 +327,20 @@ const handleApiError = (error: unknown) => {
 };
 
 export const knowledgeBaseSearchService = {
+  // Store cancel tokens for active requests
+  activeCancelTokens: new Map<string, CancelTokenSource>(),
+
   /**
-   * Perform synchronous similarity search
+   * Perform synchronous similarity search - 無超時限制
    */
   searchSimilar: async (request: SearchRequestDTO): Promise<SearchResultDTO> => {
     try {
       const response = await searchApi.post<ApiResponse<SearchResultDTO>>(
         `${BASE_URL}/search-similar`,
-        request
+        request,
+        {
+          timeout: 0 // 無超時限制
+        }
       );
       
       if (!response.data.success) {
@@ -358,13 +355,103 @@ export const knowledgeBaseSearchService = {
   },
 
   /**
-   * Perform asynchronous similarity search
+   * Perform search with retry strategy - 移除超時相關邏輯
+   */
+  searchSimilarWithRetry: async (
+    request: SearchRequestDTO,
+    options?: SearchRetryOptions
+  ): Promise<SearchResultDTO> => {
+    const { 
+      maxRetries = 2,
+      fallbackToAsync = true,
+      reduceScope = true 
+    } = options || {};
+    
+    let lastError: Error | null = null;
+    
+    // 直接嘗試搜索，不考慮超時
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Cancel any existing search
+        knowledgeBaseSearchService.cancelSearch('search-similar');
+        
+        // Create new cancel token
+        const cancelToken = axios.CancelToken.source();
+        knowledgeBaseSearchService.activeCancelTokens.set('search-similar', cancelToken);
+        
+        // 如果重試，可以選擇縮小搜索範圍
+        const adjustedRequest = (attempt > 0 && reduceScope) ? {
+          ...request,
+          options: {
+            ...request.options,
+            maxResults: Math.max(5, Math.floor((request.options?.maxResults || 20) / (attempt + 1))),
+            minSimilarityScore: Math.min(0.95, (request.options?.minSimilarityScore || 0.7) + (0.1 * attempt))
+          }
+        } : request;
+        
+        console.log(`Search attempt ${attempt + 1}/${maxRetries + 1}`);
+        
+        const response = await searchApi.post<ApiResponse<SearchResultDTO>>(
+          `${BASE_URL}/search-similar`,
+          adjustedRequest,
+          {
+            timeout: 0, // 無超時限制
+            cancelToken: cancelToken.token
+          }
+        );
+        
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Search failed');
+        }
+        
+        // Clear cancel token on success
+        knowledgeBaseSearchService.activeCancelTokens.delete('search-similar');
+        
+        return response.data.data;
+        
+      } catch (error) {
+        lastError = error as Error;
+        
+        if (axios.isCancel(error)) {
+          throw new Error('Search was cancelled');
+        }
+        
+        // 如果是網路錯誤，等待後重試
+        if (axios.isAxiosError(error) && !error.response) {
+          console.warn(`Network error on attempt ${attempt + 1}/${maxRetries + 1}`);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 5000)));
+            continue;
+          }
+        }
+        
+        // 其他錯誤不重試
+        break;
+      }
+    }
+    
+    // 如果失敗且啟用了異步回退
+    if (fallbackToAsync && lastError) {
+      console.log('Falling back to async search');
+      return knowledgeBaseSearchService.searchSimilarAsync(request);
+    }
+    
+    handleApiError(lastError);
+    throw lastError;
+  },
+
+  /**
+   * Perform asynchronous similarity search - 無超時限制
    */
   searchSimilarAsync: async (request: SearchRequestDTO): Promise<SearchResultDTO> => {
     try {
       const response = await searchApi.post<ApiResponse<SearchResultDTO>>(
         `${BASE_URL}/search-similar-async`,
-        request
+        request,
+        {
+          timeout: 0 // 無超時限制
+        }
       );
       
       if (!response.data.success) {
@@ -384,7 +471,10 @@ export const knowledgeBaseSearchService = {
   getSearchProgress: async (searchId: string): Promise<SearchProgressDTO> => {
     try {
       const response = await searchApi.get<ApiResponse<SearchProgressDTO>>(
-        `${BASE_URL}/search-progress/${searchId}`
+        `${BASE_URL}/search-progress/${searchId}`,
+        {
+          timeout: 0 // 無超時限制
+        }
       );
       
       if (!response.data.success) {
@@ -399,14 +489,70 @@ export const knowledgeBaseSearchService = {
   },
 
   /**
-   * Perform batch search
+   * Get search results
+   */
+  getSearchResults: async (searchId: string): Promise<SearchResultDTO> => {
+    try {
+      const response = await searchApi.get<ApiResponse<SearchResultDTO>>(
+        `${BASE_URL}/search-results/${searchId}`,
+        {
+          timeout: 0 // 無超時限制
+        }
+      );
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to get search results');
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+
+  /**
+   * Cancel search
+   */
+  cancelSearch: (searchKey: string) => {
+    const cancelToken = knowledgeBaseSearchService.activeCancelTokens.get(searchKey);
+    if (cancelToken) {
+      cancelToken.cancel('Search cancelled by user');
+      knowledgeBaseSearchService.activeCancelTokens.delete(searchKey);
+    }
+  },
+
+  /**
+   * Cancel all active searches
+   */
+  cancelAllSearches: () => {
+    knowledgeBaseSearchService.activeCancelTokens.forEach((cancelToken, key) => {
+      cancelToken.cancel('All searches cancelled');
+    });
+    knowledgeBaseSearchService.activeCancelTokens.clear();
+  },
+
+  /**
+   * Perform batch search - 無超時限制
    */
   searchBatch: async (request: BatchSearchRequestDTO): Promise<BatchSearchResponseDTO> => {
     try {
+      // Cancel any existing batch search
+      knowledgeBaseSearchService.cancelSearch('batch-search');
+      
+      const cancelToken = axios.CancelToken.source();
+      knowledgeBaseSearchService.activeCancelTokens.set('batch-search', cancelToken);
+      
       const response = await searchApi.post<ApiResponse<BatchSearchResponseDTO>>(
         `${BASE_URL}/search-batch`,
-        request
+        request,
+        {
+          timeout: 0, // 無超時限制
+          cancelToken: cancelToken.token
+        }
       );
+      
+      knowledgeBaseSearchService.activeCancelTokens.delete('batch-search');
       
       if (!response.data.success) {
         throw new Error(response.data.message || 'Batch search failed');
@@ -425,7 +571,10 @@ export const knowledgeBaseSearchService = {
   getBatchSearchStatus: async (batchId: string): Promise<BatchSearchStatusDTO> => {
     try {
       const response = await searchApi.get<ApiResponse<BatchSearchStatusDTO>>(
-        `${BASE_URL}/search-batch/${batchId}/status`
+        `${BASE_URL}/search-batch/${batchId}/status`,
+        {
+          timeout: 0 // 無超時限制
+        }
       );
       
       if (!response.data.success) {
@@ -445,7 +594,11 @@ export const knowledgeBaseSearchService = {
   clearCache: async (): Promise<void> => {
     try {
       const response = await searchApi.post<ApiResponse<any>>(
-        `${BASE_URL}/cache/clear`
+        `${BASE_URL}/cache/clear`,
+        {},
+        {
+          timeout: 0 // 無超時限制
+        }
       );
       
       if (!response.data.success) {
@@ -463,7 +616,10 @@ export const knowledgeBaseSearchService = {
   getCacheStats: async (): Promise<CacheStatsDTO> => {
     try {
       const response = await searchApi.get<ApiResponse<CacheStatsDTO>>(
-        `${BASE_URL}/cache/stats`
+        `${BASE_URL}/cache/stats`,
+        {
+          timeout: 0 // 無超時限制
+        }
       );
       
       if (!response.data.success) {
@@ -478,13 +634,13 @@ export const knowledgeBaseSearchService = {
   },
 
   /**
-   * Poll for async search results
+   * Poll for async search results - 無超時限制，可以無限等待
    */
   pollSearchResults: async (
     searchId: string, 
     onProgress?: (progress: SearchProgressDTO) => void,
     pollInterval = 1000,
-    maxAttempts = 60
+    maxAttempts = Number.MAX_SAFE_INTEGER // 設為最大整數，實際上無限等待
   ): Promise<SearchResultDTO> => {
     let attempts = 0;
     
@@ -498,15 +654,8 @@ export const knowledgeBaseSearchService = {
         
         // Check if search is complete
         if (progress.percentComplete >= 100 || progress.currentPhase === ProcessingPhase.FINALIZING) {
-          // Get final results - assuming there's an endpoint for this
-          // You might need to adjust based on actual backend implementation
-          const finalResponse = await searchApi.get<ApiResponse<SearchResultDTO>>(
-            `${BASE_URL}/search-results/${searchId}`
-          );
-          
-          if (finalResponse.data.success) {
-            return finalResponse.data.data;
-          }
+          // Get final results
+          return await knowledgeBaseSearchService.getSearchResults(searchId);
         }
         
         // Wait before next poll
@@ -519,11 +668,80 @@ export const knowledgeBaseSearchService = {
       }
     }
     
-    throw new Error('Search polling timeout exceeded');
+    throw new Error('Search polling exceeded maximum attempts');
   },
 
   /**
-   * Build search request with defaults
+   * Perform chunked search for large datasets - 移除超時相關邏輯
+   */
+  searchSimilarChunked: async (
+    specifications: Record<string, string>,
+    options?: SearchOptions
+  ): Promise<SearchResultDTO> => {
+    const nonEmptySpecs = Object.entries(specifications)
+      .filter(([_, value]) => value && value.trim())
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+    
+    // If few specifications, use simple search
+    if (Object.keys(nonEmptySpecs).length <= 2) {
+      return knowledgeBaseSearchService.searchSimilar({
+        specifications: nonEmptySpecs,
+        options
+      });
+    }
+    
+    // For complex searches, automatically use async approach
+    const request: SearchRequestDTO = {
+      specifications: nonEmptySpecs,
+      options: {
+        ...options,
+        useCache: true
+      }
+    };
+    
+    // Try sync first with retry, then fallback to async
+    return knowledgeBaseSearchService.searchSimilarWithRetry(request, {
+      maxRetries: 1,
+      fallbackToAsync: true,
+      reduceScope: true
+    });
+  },
+
+  /**
+   * Optimize search request based on criteria - 移除超時相關邏輯
+   */
+  optimizeSearchRequest: (request: SearchRequestDTO): SearchRequestDTO => {
+    const nonEmptySpecs = Object.entries(request.specifications)
+      .filter(([_, value]) => value && value.trim())
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {} as Record<string, string>);
+    
+    const specCount = Object.keys(nonEmptySpecs).length;
+    const hasComplexSpecs = 'bore' in nonEmptySpecs || 'stroke' in nonEmptySpecs;
+    
+    // Auto-adjust parameters based on complexity
+    if (specCount > 3 || hasComplexSpecs) {
+      return {
+        ...request,
+        specifications: nonEmptySpecs,
+        options: {
+          ...request.options,
+          maxResults: Math.min(request.options?.maxResults || 20, 15),
+          minSimilarityScore: Math.max(request.options?.minSimilarityScore || 0.7, 0.75),
+          useCache: true,
+          pageSize: Math.min(request.options?.pageSize || 20, 10)
+        },
+        searchType: request.searchType || SearchType.SIMILARITY
+      };
+    }
+    
+    return {
+      ...request,
+      specifications: nonEmptySpecs
+    };
+  },
+
+  /**
+   * Build search request with defaults - 移除超時相關邏輯
    */
   buildSearchRequest: (
     specifications: Record<string, string>,
@@ -536,7 +754,6 @@ export const knowledgeBaseSearchService = {
       includeGeneratedBOMs: false,
       onlyValidated: false,
       onlyHydraulicCylinders: false,
-      timeoutSeconds: 30,
       useCache: true,
       includeInactive: false,
       sortOrder: SortOrder.SIMILARITY_DESC,
@@ -545,10 +762,71 @@ export const knowledgeBaseSearchService = {
       pageSize: 20
     };
     
-    return {
+    const request = {
       specifications,
       options: { ...defaultOptions, ...options },
       searchType: searchType || SearchType.SIMILARITY
+    };
+    
+    // Optimize the request
+    return knowledgeBaseSearchService.optimizeSearchRequest(request);
+  },
+
+  /**
+   * Estimate search complexity and recommend approach - 更新估計時間
+   */
+  estimateSearchComplexity: (specifications: Record<string, string>, totalKBSize?: number): {
+    complexity: 'low' | 'medium' | 'high' | 'very-high';
+    recommendedApproach: 'sync' | 'sync-with-retry' | 'async';
+    estimatedTime: number;
+    recommendations: string[];
+  } => {
+    const nonEmptySpecs = Object.entries(specifications)
+      .filter(([_, value]) => value && value.trim())
+      .length;
+    
+    const hasComplexSpecs = specifications.bore || specifications.stroke;
+    const kbSize = totalKBSize || 1000; // Default estimate
+    
+    let complexity: 'low' | 'medium' | 'high' | 'very-high' = 'low';
+    let estimatedTime = 5;
+    const recommendations: string[] = [];
+    
+    // Calculate complexity score
+    let score = 0;
+    score += nonEmptySpecs * 2;
+    score += hasComplexSpecs ? 3 : 0;
+    score += kbSize > 5000 ? 5 : kbSize > 1000 ? 3 : 1;
+    
+    if (score <= 5) {
+      complexity = 'low';
+      estimatedTime = 5;
+    } else if (score <= 10) {
+      complexity = 'medium';
+      estimatedTime = 30;
+      recommendations.push('Consider enabling cache for faster results');
+    } else if (score <= 15) {
+      complexity = 'high';
+      estimatedTime = 60;
+      recommendations.push('Search may take longer time, please be patient');
+      recommendations.push('Consider using async search for better experience');
+    } else {
+      complexity = 'very-high';
+      estimatedTime = 120;
+      recommendations.push('This is a complex search that may take several minutes');
+      recommendations.push('Consider narrowing search criteria if possible');
+      recommendations.push('Async search is recommended');
+    }
+    
+    const recommendedApproach = 
+      complexity === 'low' ? 'sync' :
+      complexity === 'medium' ? 'sync-with-retry' : 'async';
+    
+    return {
+      complexity,
+      recommendedApproach,
+      estimatedTime,
+      recommendations
     };
   },
 
@@ -623,6 +901,20 @@ export const knowledgeBaseSearchService = {
       aiGeneratedCount: stats.aiGeneratedCount,
       hydraulicCylinderCount: stats.hydraulicCylinderCount
     };
+  },
+
+  /**
+   * Perform health check
+   */
+  healthCheck: async (): Promise<boolean> => {
+    try {
+      const response = await searchApi.get(`${BASE_URL}/health`, {
+        timeout: 5000 // 健康檢查保留短超時
+      });
+      return response.status === 200;
+    } catch {
+      return false;
+    }
   }
 };
 

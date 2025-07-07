@@ -1,5 +1,5 @@
 // src/pages/KnowledgeBaseSearch.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,11 @@ import {
   BarChart3,
   Trash2,
   Layers,
-  Info
+  Info,
+  TrendingUp,
+  ShieldCheck,
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 // Import search service
@@ -47,7 +51,8 @@ import knowledgeBaseSearchService, {
   SimilarBOMDTO,
   SearchProgressDTO,
   ProcessingPhase,
-  CacheStatsDTO
+  CacheStatsDTO,
+  SearchRetryOptions
 } from '@/services/knowledgeBaseSearchService';
 
 // Utility functions
@@ -62,6 +67,74 @@ const formatDuration = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+};
+
+// Component for displaying search complexity
+const SearchComplexityIndicator = ({ 
+  specifications 
+}: { 
+  specifications: Record<string, string> 
+}) => {
+  const complexity = knowledgeBaseSearchService.estimateSearchComplexity(specifications);
+  
+  const getComplexityColor = () => {
+    switch (complexity.complexity) {
+      case 'low': return 'text-green-600';
+      case 'medium': return 'text-yellow-600';
+      case 'high': return 'text-orange-600';
+      case 'very-high': return 'text-red-600';
+    }
+  };
+  
+  const getComplexityIcon = () => {
+    switch (complexity.complexity) {
+      case 'low': return <CheckCircle className="w-4 h-4" />;
+      case 'medium': return <AlertCircle className="w-4 h-4" />;
+      case 'high': return <TrendingUp className="w-4 h-4" />;
+      case 'very-high': return <ShieldCheck className="w-4 h-4" />;
+    }
+  };
+  
+  return (
+    <Alert className="mb-4">
+      {/* 使用 AlertTitle 來包裹標題，確保與 AlertDescription 有適當間距 */}
+      <AlertTitle>
+        <div className={`flex items-center gap-2 ${getComplexityColor()}`}>
+          {getComplexityIcon()}
+          <span className="font-medium">
+            Search Complexity: {complexity.complexity.toUpperCase()}
+          </span>
+        </div>
+      </AlertTitle>
+      
+      <AlertDescription className="mt-3 space-y-2">
+        {/* 使用 flex 或 grid 來組織估計時間和建議方式 */}
+        <div className="space-y-1">
+          <p className="text-sm text-gray-700">
+            <span className="font-medium">Estimated time:</span> {complexity.estimatedTime}s
+          </p>
+          <p className="text-sm text-gray-700">
+            <span className="font-medium">Recommended:</span> {complexity.recommendedApproach}
+          </p>
+        </div>
+        
+        {/* 建議列表 */}
+        {complexity.recommendations.length > 0 && (
+          <div className="mt-3 pt-2 border-t border-gray-200">
+            <p className="text-sm font-medium text-gray-700 mb-1">Optimization Tips:</p>
+            <ul className="space-y-1">
+              {complexity.recommendations.map((rec, idx) => (
+                <li key={idx} className="text-sm text-gray-600 flex items-start">
+                  <span className="mr-2">•</span>
+                  <span>{rec}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </AlertDescription>
+    </Alert>
+  );
 };
 
 // Component for displaying search results
@@ -86,7 +159,7 @@ const SearchResultCard = ({
             variant={result.similarityScore >= 0.9 ? "default" : 
                     result.similarityScore >= 0.7 ? "secondary" : "outline"}
           >
-            {(result.similarityScore * 100).toFixed(1)}% Match
+            {(result.similarityScore ).toFixed(1)}% Match
           </Badge>
         </div>
       </CardHeader>
@@ -111,6 +184,18 @@ const SearchResultCard = ({
             </div>
           </div>
         </div>
+        
+        {/* Hydraulic cylinder specs if available */}
+        {result.isHydraulicCylinder && result.parsedSpecs && (
+          <div className="mb-3 p-2 bg-blue-50 rounded text-sm">
+            <span className="font-medium text-blue-700">Hydraulic Specs: </span>
+            <span className="text-blue-600">
+              Series {result.parsedSpecs.series}, 
+              Bore {result.parsedSpecs.bore}, 
+              Stroke {result.parsedSpecs.stroke}
+            </span>
+          </div>
+        )}
         
         {/* Additional info for new fields */}
         {(result.qualityScore !== undefined || result.validationStatus || result.sourceSystem) && (
@@ -155,6 +240,9 @@ const KnowledgeBaseSearch = () => {
   const [activeTab, setActiveTab] = useState('simple');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const [useAsyncSearch, setUseAsyncSearch] = useState(false);
+  const [serviceHealthy, setServiceHealthy] = useState(true);
   
   // Search form states
   const [specifications, setSpecifications] = useState<Record<string, string>>({
@@ -191,10 +279,32 @@ const KnowledgeBaseSearch = () => {
   // Cache stats
   const [cacheStats, setCacheStats] = useState<CacheStatsDTO | null>(null);
   
-  // Load cache stats on mount
+  // Retry options
+  const [retryOptions, setRetryOptions] = useState<SearchRetryOptions>({
+    maxRetries: 2,
+    progressiveTimeout: true,
+    fallbackToAsync: true,
+    reduceScope: true
+  });
+  
+  // Check service health on mount
   useEffect(() => {
+    checkServiceHealth();
     loadCacheStats();
   }, []);
+  
+  const checkServiceHealth = async () => {
+    try {
+      const healthy = await knowledgeBaseSearchService.healthCheck();
+      setServiceHealthy(healthy);
+      if (!healthy) {
+        toast.error('Search service is currently unavailable');
+      }
+    } catch (err) {
+      console.error('Health check failed:', err);
+      setServiceHealthy(false);
+    }
+  };
   
   const loadCacheStats = async () => {
     try {
@@ -205,8 +315,15 @@ const KnowledgeBaseSearch = () => {
     }
   };
   
-  // Handle synchronous search
-  const handleSearch = async () => {
+  // Cancel active searches on unmount
+  useEffect(() => {
+    return () => {
+      knowledgeBaseSearchService.cancelAllSearches();
+    };
+  }, []);
+  
+  // Handle search with enhanced error handling and retry
+  const handleSearch = async (forceAsync = false) => {
     if (Object.values(specifications).every(v => !v.trim())) {
       toast.error('Please enter at least one search criterion');
       return;
@@ -215,6 +332,7 @@ const KnowledgeBaseSearch = () => {
     setLoading(true);
     setError(null);
     setSearchResults(null);
+    setSearchAttempt(prev => prev + 1);
     
     try {
       const request = knowledgeBaseSearchService.buildSearchRequest(
@@ -223,19 +341,93 @@ const KnowledgeBaseSearch = () => {
         searchType
       );
       
-      const results = await knowledgeBaseSearchService.searchSimilar(request);
+      // Check complexity and warn user
+      const complexity = knowledgeBaseSearchService.estimateSearchComplexity(specifications);
+      if (complexity.complexity === 'very-high' && !forceAsync) {
+        toast.warning('This search may take longer. Consider using async search.');
+      }
+      
+      let results;
+      
+      if (forceAsync || useAsyncSearch) {
+        results = await knowledgeBaseSearchService.searchSimilarAsync(request);
+        
+        if (results.searchId && results.status === 'PROCESSING') {
+          toast.info('Async search started, tracking progress...');
+          setIsPolling(true);
+          
+          results = await knowledgeBaseSearchService.pollSearchResults(
+            results.searchId,
+            (progress) => setSearchProgress(progress),
+            1000,
+            60
+          );
+          
+          setIsPolling(false);
+        }
+      } else {
+        // Try with retry strategy
+        results = await knowledgeBaseSearchService.searchSimilarWithRetry(
+          request,
+          retryOptions
+        );
+      }
+      
       setSearchResults(results);
+      setSearchProgress(null);
       
       if (results.totalResults === 0) {
-        toast.info('No matching items found');
+        toast.info('No matching items found. Try adjusting your criteria.');
       } else {
-        toast.success(`Found ${results.totalResults} matching items`);
+        toast.success(`Found ${results.totalResults} matching items in ${formatDuration(results.durationMs)}`);
+      }
+      
+      // Log search statistics
+      if (results.results) {
+        const stats = knowledgeBaseSearchService.calculateSearchStats(results.results);
+        console.log('Search statistics:', stats);
       }
       
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Search failed';
       setError(message);
-      toast.error(message);
+      
+      if (message.includes('timeout')) {
+        toast.error(
+          <div className="space-y-2">
+            <p>{message}</p>
+            <div className="flex gap-2 mt-2">
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={() => {
+                  setUseAsyncSearch(true);
+                  handleSearch(true);
+                }}
+              >
+                Try Async Search
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  setSearchOptions(prev => ({
+                    ...prev,
+                    maxResults: Math.max(5, Math.floor(prev.maxResults / 2)),
+                    minSimilarityScore: Math.min(0.9, prev.minSimilarityScore + 0.1)
+                  }));
+                  toast.info('Search scope reduced. Try again.');
+                }}
+              >
+                Reduce Scope
+              </Button>
+            </div>
+          </div>,
+          { duration: 8000 }
+        );
+      } else {
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -243,53 +435,7 @@ const KnowledgeBaseSearch = () => {
   
   // Handle asynchronous search
   const handleAsyncSearch = async () => {
-    if (Object.values(specifications).every(v => !v.trim())) {
-      toast.error('Please enter at least one search criterion');
-      return;
-    }
-    
-    setLoading(true);
-    setError(null);
-    setSearchResults(null);
-    setSearchProgress(null);
-    setIsPolling(true);
-    
-    try {
-      const request = knowledgeBaseSearchService.buildSearchRequest(
-        specifications,
-        searchOptions,
-        searchType
-      );
-      
-      const initialResult = await knowledgeBaseSearchService.searchSimilarAsync(request);
-      
-      if (initialResult.searchId && initialResult.status === 'PROCESSING') {
-        toast.info('Search started, tracking progress...');
-        
-        // Poll for results
-        const finalResults = await knowledgeBaseSearchService.pollSearchResults(
-          initialResult.searchId,
-          (progress) => setSearchProgress(progress),
-          1000,
-          60
-        );
-        
-        setSearchResults(finalResults);
-        toast.success('Search completed successfully');
-      } else {
-        // If search completed immediately
-        setSearchResults(initialResult);
-      }
-      
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Async search failed';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-      setIsPolling(false);
-      setSearchProgress(null);
-    }
+    await handleSearch(true);
   };
   
   // Handle batch search
@@ -326,7 +472,11 @@ const KnowledgeBaseSearch = () => {
       const results = await knowledgeBaseSearchService.searchBatch(request);
       setBatchResults(results);
       
-      toast.success(`Batch search completed: ${results.summary.successfulSearches}/${results.summary.totalSearches} successful`);
+      const successRate = (results.summary.successfulSearches / results.summary.totalSearches * 100).toFixed(1);
+      
+      toast.success(
+        `Batch search completed: ${results.summary.successfulSearches}/${results.summary.totalSearches} successful (${successRate}%)`
+      );
       
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Batch search failed';
@@ -336,6 +486,13 @@ const KnowledgeBaseSearch = () => {
       setLoading(false);
     }
   };
+  
+  const cancelSearch = useCallback(() => {
+    knowledgeBaseSearchService.cancelSearch('search-similar');
+    setLoading(false);
+    setIsPolling(false);
+    toast.info('Search cancelled');
+  }, []);
   
   const clearCache = async () => {
     try {
@@ -375,7 +532,20 @@ const KnowledgeBaseSearch = () => {
           <h1 className="text-2xl font-bold">Knowledge Base Search</h1>
           <p className="text-gray-600">Advanced search with caching and async processing</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {!serviceHealthy && (
+            <Badge variant="destructive">
+              <XCircle className="w-3 h-3 mr-1" />
+              Service Unavailable
+            </Badge>
+          )}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={checkServiceHealth}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </Button>
           <Button variant="outline" onClick={() => navigate('/knowledge-base')}>
             <Database className="w-4 h-4 mr-2" />
             Manage KB
@@ -422,6 +592,11 @@ const KnowledgeBaseSearch = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* Show complexity indicator */}
+                  {Object.values(specifications).some(v => v.trim()) && (
+                    <SearchComplexityIndicator specifications={specifications} />
+                  )}
+                  
                   <div>
                     <Label htmlFor="series">Series</Label>
                     <Input
@@ -431,7 +606,7 @@ const KnowledgeBaseSearch = () => {
                         ...prev,
                         series: e.target.value
                       }))}
-                      placeholder="e.g., 10, 11, 12"
+                      placeholder="e.g., 21, 22, 23"
                     />
                   </div>
                   
@@ -444,7 +619,7 @@ const KnowledgeBaseSearch = () => {
                         ...prev,
                         type: e.target.value
                       }))}
-                      placeholder="e.g., F, D, S"
+                      placeholder="e.g., A, C, D"
                     />
                   </div>
                   
@@ -529,6 +704,27 @@ const KnowledgeBaseSearch = () => {
                     </div>
                   </div>
                   
+                  <div className="space-y-2">
+                    <Label>Timeout (seconds)</Label>
+                    <Select 
+                      value={searchOptions.timeoutSeconds.toString()} 
+                      onValueChange={(v) => setSearchOptions(prev => ({
+                        ...prev,
+                        timeoutSeconds: parseInt(v)
+                      }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="15">15 seconds (Fast)</SelectItem>
+                        <SelectItem value="30">30 seconds (Normal)</SelectItem>
+                        <SelectItem value="60">60 seconds (Thorough)</SelectItem>
+                        <SelectItem value="120">120 seconds (Complete)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
                   <div className="flex items-center justify-between">
                     <Label htmlFor="useCache">Use Cache</Label>
                     <Switch
@@ -553,23 +749,36 @@ const KnowledgeBaseSearch = () => {
                     />
                   </div>
                   
-                  <Button 
-                    onClick={handleSearch} 
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Searching...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="mr-2 h-4 w-4" />
-                        Search
-                      </>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => handleSearch(false)} 
+                      disabled={loading || !serviceHealthy}
+                      className="w-full"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="mr-2 h-4 w-4" />
+                          Search
+                        </>
+                      )}
+                    </Button>
+                    
+                    {loading && (
+                      <Button 
+                        onClick={cancelSearch}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Cancel Search
+                      </Button>
                     )}
-                  </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -612,6 +821,12 @@ const KnowledgeBaseSearch = () => {
                         </div>
                       </div>
                       
+                      {searchProgress.estimatedRemainingMs && (
+                        <div className="text-sm text-gray-600">
+                          Estimated remaining: {formatDuration(searchProgress.estimatedRemainingMs)}
+                        </div>
+                      )}
+                      
                       {searchProgress.warningMessage && (
                         <Alert>
                           <AlertCircle className="h-4 w-4" />
@@ -629,13 +844,63 @@ const KnowledgeBaseSearch = () => {
                     <h3 className="text-lg font-semibold">
                       Search Results ({searchResults.totalResults})
                     </h3>
-                    {searchResults.durationMs > 0 && (
-                      <Badge variant="outline">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {formatDuration(searchResults.durationMs)}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {searchResults.durationMs > 0 && (
+                        <Badge variant="outline">
+                          <Clock className="w-3 h-3 mr-1" />
+                          {formatDuration(searchResults.durationMs)}
+                        </Badge>
+                      )}
+                      {searchResults.timeoutCount > 0 && (
+                        <Badge variant="secondary">
+                          {searchResults.timeoutCount} timeouts
+                        </Badge>
+                      )}
+                      {searchAttempt > 1 && (
+                        <Badge variant="outline">
+                          Attempt {searchAttempt}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
+                  
+                  {/* Search statistics */}
+                  {searchResults.results.length > 0 && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-500">Avg Similarity:</span>
+                          <div className="font-medium">
+                            {(knowledgeBaseSearchService.calculateSearchStats(searchResults.results).avgSimilarity ).toFixed(1)}%
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Hydraulic:</span>
+                          <div className="font-medium">
+                            {knowledgeBaseSearchService.calculateSearchStats(searchResults.results).hydraulicCylinderCount}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Validated:</span>
+                          <div className="font-medium">
+                            {knowledgeBaseSearchService.calculateSearchStats(searchResults.results).validatedCount}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">AI Generated:</span>
+                          <div className="font-medium">
+                            {knowledgeBaseSearchService.calculateSearchStats(searchResults.results).aiGeneratedCount}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Avg Quality:</span>
+                          <div className="font-medium">
+                            {(knowledgeBaseSearchService.calculateSearchStats(searchResults.results).avgQualityScore * 100).toFixed(0)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="grid gap-4">
                     {searchResults.results.map((result: SimilarBOMDTO, index: number) => (
@@ -654,9 +919,32 @@ const KnowledgeBaseSearch = () => {
                   <CardContent className="text-center py-12">
                     <Info className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium mb-2">No Results Found</h3>
-                    <p className="text-gray-500">
+                    <p className="text-gray-500 mb-4">
                       Try adjusting your search criteria or lowering the similarity threshold
                     </p>
+                    <div className="flex gap-2 justify-center">
+                      <Button 
+                        variant="outline"
+                        onClick={() => setSearchOptions(prev => ({
+                          ...prev,
+                          minSimilarityScore: Math.max(0.3, prev.minSimilarityScore - 0.1)
+                        }))}
+                      >
+                        Lower Threshold
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => setSpecifications({
+                          series: '',
+                          type: '',
+                          bore: '',
+                          stroke: '',
+                          rodEndType: ''
+                        })}
+                      >
+                        Clear Criteria
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -716,21 +1004,6 @@ const KnowledgeBaseSearch = () => {
                     </Select>
                   </div>
                   
-                  <div>
-                    <Label htmlFor="timeout">Timeout (seconds)</Label>
-                    <Input
-                      id="timeout"
-                      type="number"
-                      value={searchOptions.timeoutSeconds}
-                      onChange={(e) => setSearchOptions(prev => ({
-                        ...prev,
-                        timeoutSeconds: parseInt(e.target.value) || 30
-                      }))}
-                      min={10}
-                      max={300}
-                    />
-                  </div>
-                  
                   <div className="space-y-2">
                     <Label>Additional Filters</Label>
                     <div className="space-y-2">
@@ -758,6 +1031,47 @@ const KnowledgeBaseSearch = () => {
                       </div>
                     </div>
                   </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-2">
+                    <Label>Retry Options</Label>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="progressiveTimeout" className="text-sm font-normal">Progressive Timeout</Label>
+                        <Switch
+                          id="progressiveTimeout"
+                          checked={retryOptions.progressiveTimeout}
+                          onCheckedChange={(checked) => setRetryOptions(prev => ({
+                            ...prev,
+                            progressiveTimeout: checked
+                          }))}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="fallbackToAsync" className="text-sm font-normal">Fallback to Async</Label>
+                        <Switch
+                          id="fallbackToAsync"
+                          checked={retryOptions.fallbackToAsync}
+                          onCheckedChange={(checked) => setRetryOptions(prev => ({
+                            ...prev,
+                            fallbackToAsync: checked
+                          }))}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="reduceScope" className="text-sm font-normal">Auto-reduce Scope</Label>
+                        <Switch
+                          id="reduceScope"
+                          checked={retryOptions.reduceScope}
+                          onCheckedChange={(checked) => setRetryOptions(prev => ({
+                            ...prev,
+                            reduceScope: checked
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
@@ -770,9 +1084,18 @@ const KnowledgeBaseSearch = () => {
                     </AlertDescription>
                   </Alert>
                   
+                  <div className="flex items-center justify-between mb-4">
+                    <Label htmlFor="asyncDefault">Use Async by Default</Label>
+                    <Switch
+                      id="asyncDefault"
+                      checked={useAsyncSearch}
+                      onCheckedChange={setUseAsyncSearch}
+                    />
+                  </div>
+                  
                   <Button
                     onClick={handleAsyncSearch}
-                    disabled={loading}
+                    disabled={loading || !serviceHealthy}
                     variant="secondary"
                     className="w-full"
                   >
@@ -820,7 +1143,7 @@ const KnowledgeBaseSearch = () => {
                 
                 <Button
                   onClick={handleBatchSearch}
-                  disabled={loading}
+                  disabled={loading || !serviceHealthy}
                   className="w-full"
                 >
                   {loading ? (
@@ -901,6 +1224,11 @@ const KnowledgeBaseSearch = () => {
                             ) : result.searchResult && (
                               <p className="text-sm text-gray-600 mt-2">
                                 Found {result.searchResult.totalResults} matches
+                                {result.searchResult.results && result.searchResult.results[0] && (
+                                  <span className="ml-2 text-gray-500">
+                                    (Top match: {(result.searchResult.results[0].similarityScore).toFixed(1)}%)
+                                  </span>
+                                )}
                               </p>
                             )}
                           </CardContent>
@@ -966,6 +1294,17 @@ const KnowledgeBaseSearch = () => {
                       ))}
                     </div>
                   </div>
+                  
+                  {cacheStats.statistics.totalCacheSize > 0 && (
+                    <div className="text-sm text-gray-600">
+                      Total cache size: {cacheStats.statistics.totalCacheSize.toLocaleString()} entries
+                      {cacheStats.statistics.evictionCount > 0 && (
+                        <span className="ml-2">
+                          ({cacheStats.statistics.evictionCount} evictions)
+                        </span>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="flex justify-end">
                     <Button onClick={clearCache} variant="destructive">

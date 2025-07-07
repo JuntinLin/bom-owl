@@ -1,4 +1,6 @@
 package com.jfc.owl.service;
+import com.jfc.owl.dto.search.SearchRequestDTO.SearchOptions;
+import com.jfc.owl.dto.search.SearchRequestDTO.SearchType;
 import com.jfc.owl.entity.OWLKnowledgeBase;
 import org.apache.jena.ontology.OntModel;
 
@@ -59,6 +61,25 @@ public interface OWLKnowledgeBaseService {
      * @return List of similar BOMs with similarity scores
      */
     List<Map<String, Object>> searchSimilarBOMs(Map<String, String> specifications);
+    
+    /**
+     * Search for similar BOMs with search options
+     * 
+     * @param specifications The search specifications
+     * @param options Search options
+     * @return List of similar BOMs with similarity scores
+     */
+    List<Map<String, Object>> searchSimilarBOMs(Map<String, String> specifications, SearchOptions options);
+    
+    /**
+     * Search for similar BOMs with search options and search type
+     * 
+     * @param specifications The search specifications
+     * @param options Search options
+     * @param searchType The type of search (SIMILARITY, EXACT, FUZZY, SEMANTIC)
+     * @return List of similar BOMs with similarity scores
+     */
+    List<Map<String, Object>> searchSimilarBOMs(Map<String, String> specifications, SearchOptions options, SearchType searchType);
     
     /**
      * Search for similar hydraulic cylinders

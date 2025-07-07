@@ -1,9 +1,7 @@
 package com.jfc.owl.service;
 
-import org.apache.jena.ontology.OntClass;
 import org.apache.jena.ontology.OntModel;
 import org.apache.jena.ontology.OntModelSpec;
-import org.apache.jena.ontology.OntProperty;
 import org.apache.jena.query.*;
 import org.apache.jena.rdf.model.InfModel;
 import org.apache.jena.rdf.model.ModelFactory;
@@ -15,6 +13,7 @@ import org.apache.jena.reasoner.ValidityReport;
 import org.apache.jena.reasoner.rulesys.GenericRuleReasoner;
 import org.apache.jena.reasoner.rulesys.Rule;
 import org.apache.jena.vocabulary.RDFS;
+import org.apache.jena.vocabulary.ReasonerVocabulary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +29,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -77,24 +82,135 @@ public class ReasoningService {
                 logger.debug("Merged hydraulic cylinder domain ontology");
             }
             
-            // Create enhanced reasoner
-            Reasoner reasoner = createEnhancedReasoner(reasonerType, isHydraulicCylinder);
+         // Log model size for debugging
+            long modelSize = ontModel.size();
+            logger.info("Ontology model size: {} statements", modelSize);
+            results.put("modelSize", modelSize);
             
-            // Apply reasoning
-            InfModel infModel = ModelFactory.createInfModel(reasoner, ontModel);
+            // Create enhanced reasoner
+            //Reasoner reasoner = createEnhancedReasoner(reasonerType, isHydraulicCylinder);
+            
+         // Apply reasoning with timeout protection for OWL reasoner
+            final InfModel infModel;
+            
+            if ("OWL".equals(reasonerType) && modelSize > 1000) {
+                // Use timeout for OWL reasoner on larger models
+                logger.info("Applying OWL reasoning with timeout protection");
+                
+             // Create reasoner in a final variable for lambda
+                final Reasoner owlReasoner = createEnhancedReasoner(reasonerType, isHydraulicCylinder);
+                
+                ExecutorService executor = Executors.newSingleThreadExecutor();
+                Future<InfModel> future = executor.submit(() -> 
+                    ModelFactory.createInfModel(owlReasoner, ontModel)
+                );
+                InfModel tempModel = null;
+                try {
+                    // Timeout based on model size
+                    int timeoutSeconds = calculateTimeout(modelSize);
+                    tempModel  = future.get(timeoutSeconds, TimeUnit.SECONDS);
+                    logger.info("OWL reasoning completed successfully");
+                    
+                } catch (TimeoutException e) {
+                    logger.warn("OWL reasoning timed out after {} seconds, falling back to OWL_MINI", 
+                               calculateTimeout(modelSize));
+                    future.cancel(true);
+                    
+                    // Fallback to OWL_MINI
+                    Reasoner fallbackReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                    tempModel  = ModelFactory.createInfModel(fallbackReasoner, ontModel);
+                    results.put("reasonerUsed", "OWL_MINI (fallback from OWL timeout)");
+                    results.put("reasoningTimeout", true);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt(); // Restore interrupted status
+                    logger.error("OWL reasoning interrupted, falling back to OWL_MINI", e);
+                    
+                    // Fallback to OWL_MINI
+                    Reasoner fallbackReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                    tempModel = ModelFactory.createInfModel(fallbackReasoner, ontModel);
+                    results.put("reasonerUsed", "OWL_MINI (fallback from interruption)");
+                    results.put("reasoningError", "Reasoning interrupted");
+                    
+                } catch (ExecutionException e) {
+                    logger.error("Error during OWL reasoning execution", e);
+                    
+                    // Fallback to OWL_MINI
+                    Reasoner fallbackReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                    tempModel = ModelFactory.createInfModel(fallbackReasoner, ontModel);
+                    results.put("reasonerUsed", "OWL_MINI (fallback from execution error)");
+                    results.put("reasoningError", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+                      
+                } finally {
+                    executor.shutdown();
+                    if (tempModel == null) {
+                        // Last resort fallback
+                        logger.error("All reasoning attempts failed, using OWL_MINI as last resort");
+                        Reasoner fallbackReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                        tempModel = ModelFactory.createInfModel(fallbackReasoner, ontModel);
+                        results.put("reasonerUsed", "OWL_MINI (last resort fallback)");
+                    }
+                    infModel = tempModel;
+                }
+            } else {
+                // Standard reasoning without timeout
+            	Reasoner reasoner = createEnhancedReasoner(reasonerType, isHydraulicCylinder);
+                infModel = ModelFactory.createInfModel(reasoner, ontModel);
+            }
+            
+         // Create a final reference for use in lambda
+            final InfModel modelForValidation = infModel;
             
             // Validate the model with enhanced validation
-            ValidityReport validity = infModel.validate();
-            boolean isValid = validity.isValid();
-            results.put("isValid", isValid);
+         // Validate the model with enhanced validation - with timeout for OWL
+            boolean validationSkipped = false;            
+            ValidityReport validity = null; //infModel.validate();
             
-            // Enhanced validation reporting
-            List<Map<String, Object>> validationIssues = processValidationIssues(validity);
-            results.put("validationIssues", validationIssues);
+            if ("OWL".equals(reasonerType)) {
+                // Skip validation for OWL reasoner or use timeout
+                if (modelSize > 5000) {
+                    validationSkipped = true;
+                    logger.info("Skipping validation for OWL reasoner due to large model size");
+                } else {
+                    // Try validation with timeout
+                    ExecutorService validationExecutor = Executors.newSingleThreadExecutor();
+                    Future<ValidityReport> validationFuture = validationExecutor.submit(() -> 
+                    modelForValidation.validate()
+                    );
+                    
+                    try {
+                        validity = validationFuture.get(30, TimeUnit.SECONDS);
+                    } catch (TimeoutException e) {
+                        logger.warn("Validation timed out for OWL reasoner");
+                        validationFuture.cancel(true);
+                        validationSkipped = true;
+                    } finally {
+                        validationExecutor.shutdown();
+                    }
+                }
+            } else {
+                // Normal validation for other reasoners
+                validity = infModel.validate();
+            }
             
+         // Process validation results
+            if (validationSkipped) {
+                results.put("isValid", "skipped");
+                results.put("validationIssues", new ArrayList<>());
+                results.put("validationNote", "Validation skipped for performance reasons");
+            } else if (validity != null) {
+                boolean isValid = validity.isValid();
+                results.put("isValid", isValid);
+                
+                // Enhanced validation reporting
+                List<Map<String, Object>> validationIssues = processValidationIssues(validity);
+                results.put("validationIssues", validationIssues);
+            }
+            
+                        
             // Extract comprehensive inferred statements
             List<Map<String, String>> inferredStatements = extractInferredStatements(infModel, ontModel);
             results.put("inferredStatements", inferredStatements);
+            results.put("inferredCount", inferredStatements.size());
             
             // Extract enhanced subclass relationships
             List<Map<String, String>> inferredSubclasses = extractInferredSubclasses(infModel, ontModel);
@@ -111,6 +227,11 @@ public class ReasoningService {
             // Add reasoning performance metrics
             addReasoningMetrics(results, infModel, ontModel);
             
+         // Add actual reasoner used
+            if (!results.containsKey("reasonerUsed")) {
+                results.put("reasonerUsed", reasonerType);
+            }
+            
             logger.info("Enhanced reasoning completed for {} with {} inferences", 
                        masterItemCode, inferredStatements.size());
             
@@ -120,9 +241,20 @@ public class ReasoningService {
             logger.error("Error in enhanced reasoning for " + masterItemCode, e);
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("error", e.getMessage());
-            errorResult.put("stackTrace", Arrays.toString(e.getStackTrace()));
+            errorResult.put("errorType", e.getClass().getSimpleName());
+            errorResult.put("stackTrace", Arrays.toString(e.getStackTrace()).substring(0, Math.min(1000, Arrays.toString(e.getStackTrace()).length())));
             return errorResult;
         }
+    }
+    
+    /**
+     * Calculate timeout based on model size
+     */
+    private int calculateTimeout(long modelSize) {
+        if (modelSize > 10000) return 120; // 2 minutes for very large models
+        if (modelSize > 5000) return 60;   // 1 minute for large models
+        if (modelSize > 2000) return 30;   // 30 seconds for medium models
+        return 20; // 20 seconds for small models
     }
     
     /**
@@ -143,12 +275,15 @@ public class ReasoningService {
         switch (reasonerType) {
             case "OWL_MINI":
                 baseReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                logger.debug("Using OWL_MINI reasoner");
                 break;
             case "OWL_MICRO":
                 baseReasoner = ReasonerRegistry.getOWLMicroReasoner();
+                logger.debug("Using OWL_MICRO reasoner");
                 break;
             case "RDFS":
                 baseReasoner = ReasonerRegistry.getRDFSReasoner();
+                logger.debug("Using RDFS reasoner");
                 break;
             case "ENHANCED_HYDRAULIC":
                 // Create rule-based reasoner with hydraulic cylinder rules
@@ -168,15 +303,186 @@ public class ReasoningService {
                     ruleReasoner.setOWLTranslation(true);
                     ruleReasoner.setTransitiveClosureCaching(true);
                     return ruleReasoner;
+                }else {
+                    logger.warn("ENHANCED_HYDRAULIC requested but hydraulic rules not available, using OWL_MINI");
+                    baseReasoner = ReasonerRegistry.getOWLMiniReasoner();
                 }
-                // Fall through to default
+                break;
             case "OWL":
+            	// Optimized OWL reasoner with performance considerations
+                try {
+                    // Check model size if available (you'll need to pass ontModel as parameter or make it accessible)
+                    long modelSize = estimateModelSize();
+                    
+                    if (modelSize > 10000) {
+                        // Large model - use micro reasoner for performance
+                        logger.info("Large model detected (estimated {} statements), using OWL_MICRO for performance", modelSize);
+                        baseReasoner = ReasonerRegistry.getOWLMicroReasoner();
+                        
+                    } else if (modelSize > 5000) {
+                        // Medium model - use mini reasoner
+                        logger.info("Medium model detected (estimated {} statements), using OWL_MINI for performance", modelSize);
+                        baseReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                        
+                    } else {
+                        // Small model - create optimized OWL reasoner with custom rules
+                        logger.info("Creating optimized OWL reasoner for estimated {} statements", modelSize);
+                        
+                        List<Rule> optimizedRules = createOptimizedOWLRules();
+                        
+                        // Add hydraulic cylinder rules if applicable
+                        if (includeHydraulicRules && hydraulicCylinderRules != null) {
+                            try {
+                                List<String> hcRuleTexts = hydraulicCylinderRules.getEnhancedHydraulicCylinderRules();
+                                int addedRules = 0;
+                                
+                                for (String ruleText : hcRuleTexts) {
+                                    try {
+                                        optimizedRules.add(Rule.parseRule(ruleText));
+                                        addedRules++;
+                                    } catch (Exception e) {
+                                        logger.debug("Skipped hydraulic rule: {}", e.getMessage());
+                                    }
+                                }
+                                
+                                logger.info("Added {} hydraulic cylinder rules to OWL reasoner", addedRules);
+                                
+                            } catch (Exception e) {
+                                logger.warn("Failed to add hydraulic rules to OWL reasoner: {}", e.getMessage());
+                            }
+                        }
+                        
+                        GenericRuleReasoner owlReasoner = new GenericRuleReasoner(optimizedRules);
+                        owlReasoner.setOWLTranslation(true);
+                        owlReasoner.setTransitiveClosureCaching(true);
+                        owlReasoner.setFunctorFiltering(true);
+                        
+                        // Additional performance optimizations
+                        owlReasoner.setParameter(ReasonerVocabulary.PROPsetRDFSLevel, 
+                            ReasonerVocabulary.RDFS_SIMPLE);
+                        owlReasoner.setDerivationLogging(false); // Disable for performance
+                        
+                        baseReasoner = owlReasoner;
+                    }
+                    
+                } catch (Exception e) {
+                    logger.error("Failed to create optimized OWL reasoner, falling back to OWL_MINI", e);
+                    baseReasoner = ReasonerRegistry.getOWLMiniReasoner();
+                }
+                break;
             default:
+            	logger.warn("Unknown reasoner type: {}, using default OWL reasoner", reasonerType);
                 baseReasoner = ReasonerRegistry.getOWLReasoner();
                 break;
         }
         
         return baseReasoner;
+    }
+    
+    /**
+     * Create optimized OWL rules for better performance
+     * These rules provide essential OWL reasoning without the full complexity
+     */
+    private List<Rule> createOptimizedOWLRules() {
+        List<Rule> rules = new ArrayList<>();
+        
+        try {
+            // Essential RDFS rules
+            rules.add(Rule.parseRule("[rdfs2: (?p rdfs:domain ?c) (?x ?p ?y) -> (?x rdf:type ?c)]"));
+            rules.add(Rule.parseRule("[rdfs3: (?p rdfs:range ?c) (?x ?p ?y) -> (?y rdf:type ?c)]"));
+            rules.add(Rule.parseRule("[rdfs5: (?a rdfs:subPropertyOf ?b) (?b rdfs:subPropertyOf ?c) -> (?a rdfs:subPropertyOf ?c)]"));
+            rules.add(Rule.parseRule("[rdfs6: (?p rdf:type rdf:Property) -> (?p rdfs:subPropertyOf ?p)]"));
+            rules.add(Rule.parseRule("[rdfs7: (?p rdfs:subPropertyOf ?q) (?x ?p ?y) -> (?x ?q ?y)]"));
+            rules.add(Rule.parseRule("[rdfs8: (?c rdf:type rdfs:Class) -> (?c rdfs:subClassOf rdfs:Resource)]"));
+            rules.add(Rule.parseRule("[rdfs9: (?c rdfs:subClassOf ?d) (?x rdf:type ?c) -> (?x rdf:type ?d)]"));
+            rules.add(Rule.parseRule("[rdfs10: (?x rdf:type rdfs:Class) -> (?x rdfs:subClassOf ?x)]"));
+            
+            // Transitive closure for subClassOf
+            rules.add(Rule.parseRule("[rdfs11: (?a rdfs:subClassOf ?b) (?b rdfs:subClassOf ?c) -> (?a rdfs:subClassOf ?c)]"));
+            
+            // Basic OWL rules - only the most essential ones
+            rules.add(Rule.parseRule("[owl-thing: (?x rdf:type ?c) (?c rdf:type owl:Class) -> (?x rdf:type owl:Thing)]"));
+            rules.add(Rule.parseRule("[owl-nothing: (?x rdf:type owl:Nothing) -> (?x rdf:type owl:Thing)]"));
+            
+            // Transitive Property
+            rules.add(Rule.parseRule("[transitiveProperty: (?p rdf:type owl:TransitiveProperty) (?x ?p ?y) (?y ?p ?z) -> (?x ?p ?z)]"));
+            
+            // Symmetric Property
+            rules.add(Rule.parseRule("[symmetricProperty: (?p rdf:type owl:SymmetricProperty) (?x ?p ?y) -> (?y ?p ?x)]"));
+            
+            // Inverse Property
+            rules.add(Rule.parseRule("[inverseOf: (?p owl:inverseOf ?q) (?x ?p ?y) -> (?y ?q ?x)]"));
+            rules.add(Rule.parseRule("[inverseOf2: (?p owl:inverseOf ?q) (?x ?q ?y) -> (?y ?p ?x)]"));
+            
+            // Same As (limited to avoid complexity explosion)
+            rules.add(Rule.parseRule("[sameAs1: (?x owl:sameAs ?y) (?x ?p ?z) -> (?y ?p ?z)]"));
+            rules.add(Rule.parseRule("[sameAs2: (?x owl:sameAs ?y) (?z ?p ?x) -> (?z ?p ?y)]"));
+            rules.add(Rule.parseRule("[sameAs3: (?x owl:sameAs ?y) -> (?y owl:sameAs ?x)]"));
+            
+            // Functional Property (simplified)
+            rules.add(Rule.parseRule("[functionalProperty: (?p rdf:type owl:FunctionalProperty) (?x ?p ?y) (?x ?p ?z) -> (?y owl:sameAs ?z)]"));
+            
+            // Skip expensive OWL Full rules:
+            // - Complex cardinality restrictions
+            // - Disjoint classes (can cause performance issues)
+            // - Complement classes
+            // - AllValuesFrom/SomeValuesFrom restrictions (very expensive)
+            // - Complex union/intersection operations
+            
+            logger.info("Created {} optimized OWL rules", rules.size());
+            
+        } catch (Exception e) {
+            logger.error("Error creating optimized OWL rules", e);
+            // Return at least RDFS rules
+            try {
+                rules.add(Rule.parseRule("[rdfs9: (?c rdfs:subClassOf ?d) (?x rdf:type ?c) -> (?x rdf:type ?d)]"));
+            } catch (Exception ex) {
+                // Ignore
+            }
+        }
+        
+        return rules;
+    }
+
+    /**
+     * Estimate model size for performance optimization
+     * This is a helper method - you might need to adapt based on your actual implementation
+     */
+    private long estimateModelSize() {
+        // If you have access to the ontModel at this point, use:
+        // return ontModel.size();
+        
+        // Otherwise, return a conservative estimate
+        // You might want to pass this as a parameter or store it in a field
+        return 1000; // Default estimate for small models
+    }
+
+    /**
+     * Create a wrapper reasoner with timeout capability
+     * This can be used to prevent long-running reasoning operations
+     */
+    private Reasoner createTimeoutReasoner(Reasoner baseReasoner, int timeoutSeconds) {
+        // This is a conceptual implementation - you'd need to implement a proper wrapper
+        // that can interrupt reasoning operations after a timeout
+        return baseReasoner;
+    }
+
+    /**
+     * Validate reasoner configuration
+     * Call this after creating a reasoner to ensure it's properly configured
+     */
+    private void validateReasonerConfiguration(Reasoner reasoner, String reasonerType) {
+        if (reasoner == null) {
+            throw new IllegalStateException("Failed to create reasoner for type: " + reasonerType);
+        }
+        
+        // Log reasoner capabilities
+        if (reasoner instanceof GenericRuleReasoner) {
+            GenericRuleReasoner ruleReasoner = (GenericRuleReasoner) reasoner;
+            logger.debug("Rule reasoner configured with {} rules", ruleReasoner.getRules().size());
+        }
+        
+        // Add any additional validation as needed
     }
     
     /**

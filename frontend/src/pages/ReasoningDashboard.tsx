@@ -1,5 +1,6 @@
 // src/pages/ReasoningDashboard.tsx
 import { useState, useEffect } from 'react';
+import { AlertCircle, Zap, Clock } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,8 +26,8 @@ import {
 } from '@/services/bomGeneratorService';
 
 // Types
-import { 
-  ReasoningResult, 
+import {
+  ReasoningResult,
   ReasonerInfo,
   SparqlQueryResult,
   CustomRuleResult,
@@ -70,15 +71,15 @@ interface SimilarCylinderCardProps {
 }
 
 // Component Selector Component
-const ComponentSelector = ({ 
-  category, 
-  selectedOption, 
-  onSelectOption, 
+const ComponentSelector = ({
+  category,
+  selectedOption,
+  onSelectOption,
   onChangeQuantity,
-  quantity 
+  quantity
 }: ComponentSelectorProps) => {
   const selectedComponent = category.options.find(opt => opt.code === selectedOption);
-  
+
   return (
     <Card className="mb-4">
       <CardHeader className="pb-3">
@@ -98,8 +99,8 @@ const ComponentSelector = ({
         <div className="grid gap-4">
           <div>
             <Label htmlFor={`${category.category}-component`}>Component</Label>
-            <Select 
-              value={selectedOption || ''} 
+            <Select
+              value={selectedOption || ''}
               onValueChange={onSelectOption}
             >
               <SelectTrigger id={`${category.category}-component`}>
@@ -141,7 +142,7 @@ const ComponentSelector = ({
               </span>
             </div>
           )}
-          
+
           <div>
             <Label htmlFor={`${category.category}-quantity`}>Quantity</Label>
             <Input
@@ -206,12 +207,12 @@ const SimilarCylinderCard = ({ cylinder, onUseAsReference }: SimilarCylinderCard
 const ReasoningDashboard = () => {
   const { masterItemCode } = useParams<{ masterItemCode: string }>();
   const navigate = useNavigate();
-  
+
   // Reasoning states
   const [activeTab, setActiveTab] = useState('reasoner');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [reasonerType, setReasonerType] = useState('OWL');
+  const [reasonerType, setReasonerType] = useState('OWL_MINI');
   const [reasoningResult, setReasoningResult] = useState<ReasoningResult | null>(null);
   const [availableReasoners, setAvailableReasoners] = useState<ReasonerInfo[]>([]);
   const [materialName, setMaterialName] = useState<string>('');
@@ -229,7 +230,8 @@ const ReasoningDashboard = () => {
   const [selectedComponents, setSelectedComponents] = useState<Record<string, string>>({});
   const [componentQuantities, setComponentQuantities] = useState<Record<string, number>>({});
   const [exportFormat, setExportFormat] = useState('JSONLD');
-  
+  const [reasoningWarnings, setReasoningWarnings] = useState<string[]>([]);
+
   useEffect(() => {
     // Fetch available reasoners when component mounts
     const fetchReasoners = async () => {
@@ -246,7 +248,7 @@ const ReasoningDashboard = () => {
         ]);
       }
     };
-    
+
     // Fetch material details if masterItemCode is provided
     const fetchMaterialDetails = async () => {
       if (masterItemCode) {
@@ -260,7 +262,7 @@ const ReasoningDashboard = () => {
         }
       }
     };
-    
+
     fetchReasoners();
     fetchMaterialDetails();
   }, [masterItemCode]);
@@ -270,7 +272,7 @@ const ReasoningDashboard = () => {
     if (generatedBom) {
       const initialComponents: Record<string, string> = {};
       const initialQuantities: Record<string, number> = {};
-      
+
       generatedBom.componentCategories.forEach(category => {
         if (category.options.length > 0) {
           // Select the recommended option if available, otherwise the first one
@@ -279,41 +281,101 @@ const ReasoningDashboard = () => {
         }
         initialQuantities[category.category] = category.defaultQuantity;
       });
-      
+
       setSelectedComponents(initialComponents);
       setComponentQuantities(initialQuantities);
     }
   }, [generatedBom]);
-  
+
   // If no master item code is provided, redirect to search page
   useEffect(() => {
     if (!masterItemCode) {
       navigate('/items');
     }
   }, [masterItemCode, navigate]);
-  
+
   // Reasoning functions
   const performReasoning = async () => {
     if (!masterItemCode) {
       setError('Master item code is required');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
-    
+    setReasoningWarnings([]);
+
     try {
       const result = await reasoningService.performReasoning(masterItemCode, reasonerType);
       setReasoningResult(result);
-      toast.success('Reasoning completed successfully');
+
+      // Handle warnings from the result
+      if (result.warnings && result.warnings.length > 0) {
+        setReasoningWarnings(result.warnings);
+      }
+
+      // Show appropriate toast based on result
+      if (result.reasonerUsed && result.reasonerUsed.includes('fallback')) {
+        toast.warning('Reasoning completed with fallback reasoner', {
+          description: `Used ${result.reasonerUsed} due to performance constraints`
+        });
+      } else if (result.isValid === 'skipped') {
+        toast.info('Reasoning completed (validation skipped)', {
+          description: 'Validation was skipped for performance optimization'
+        });
+      } else {
+        toast.success('Reasoning completed successfully');
+      }
     } catch (err: any) {
       const errorMessage = err.message || 'Error performing reasoning. Please try again.';
       setError(errorMessage);
-      toast.error(errorMessage);
+
+      // Provide specific recommendations based on error
+      if (errorMessage.includes('timeout') || errorMessage.includes('performance')) {
+        toast.error('Reasoning timeout', {
+          description: 'Try using a lighter reasoner for better performance',
+          action: {
+            label: 'Use OWL_MINI',
+            onClick: () => setReasonerType('OWL_MINI')
+          }
+        });
+      } else {
+        toast.error(errorMessage);
+      }
+
       console.error('Reasoning error:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Add a performance indicator component
+  const ReasonerPerformanceIndicator = ({ reasonerId }: { reasonerId: string }) => {
+    const getPerformanceInfo = (id: string) => {
+      switch (id) {
+        case 'RDFS':
+          return { level: 'fast', color: 'text-green-600', icon: Zap, label: 'Fast' };
+        case 'OWL_MICRO':
+        case 'OWL_MINI':
+          return { level: 'moderate', color: 'text-blue-600', icon: Zap, label: 'Moderate' };
+        case 'ENHANCED_HYDRAULIC':
+          return { level: 'moderate', color: 'text-blue-600', icon: Zap, label: 'Moderate' };
+        case 'OWL':
+          return { level: 'slow', color: 'text-orange-600', icon: Clock, label: 'Slow' };
+        default:
+          return { level: 'unknown', color: 'text-gray-600', icon: Info, label: 'Unknown' };
+      }
+    };
+
+    const perf = getPerformanceInfo(reasonerId);
+    const Icon = perf.icon;
+
+    return (
+      <span className={`inline-flex items-center text-xs ${perf.color}`}>
+        <Icon className="h-3 w-3 mr-1" />
+        {perf.label}
+      </span>
+    );
   };
 
   // BOM Generator functions
@@ -322,21 +384,21 @@ const ReasoningDashboard = () => {
       setError('Please enter an item code');
       return;
     }
-    
+
     setIsValidating(true);
     setError(null);
-    
+
     try {
       const result = await bomGeneratorService.validateCylinderCode(itemCode);
       setCodeValidation(result);
-      
+
       if (!result.isValid) {
         setError(result.message);
         toast.error(result.message);
       } else {
         toast.success('Code validated successfully');
       }
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during validation';
       setError(errorMessage);
@@ -352,22 +414,22 @@ const ReasoningDashboard = () => {
       setError('Please enter a valid hydraulic cylinder code');
       return;
     }
-    
+
     setIsGenerating(true);
     setError(null);
-    
+
     try {
       const newItemInfo: NewItemInfo = {
         itemCode,
         itemName,
         itemSpec
       };
-      
+
       const result = await bomGeneratorService.generateNewBom(newItemInfo);
       setGeneratedBom(result);
       setBomActiveTab('components');
       toast.success('BOM generated successfully');
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during BOM generation';
       setError(errorMessage);
@@ -382,21 +444,21 @@ const ReasoningDashboard = () => {
       setError('No BOM has been generated yet');
       return;
     }
-    
+
     setIsExporting(true);
     setError(null);
-    
+
     try {
       // Create a modified BOM structure with selected components
-      const exportBom = { 
+      const exportBom = {
         ...generatedBom,
         // Add selected components and quantities if needed
         selectedComponents,
         componentQuantities
       };
-      
+
       const ontology = await bomGeneratorService.exportGeneratedBom(exportBom, exportFormat);
-      
+
       // Create download
       const blob = new Blob([ontology], { type: getContentType(exportFormat) });
       const url = URL.createObjectURL(blob);
@@ -407,9 +469,9 @@ const ReasoningDashboard = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       toast.success('BOM exported successfully');
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during export';
       setError(errorMessage);
@@ -470,7 +532,7 @@ const ReasoningDashboard = () => {
         return 'jsonld';
     }
   };
-  
+
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
@@ -490,14 +552,14 @@ const ReasoningDashboard = () => {
           Back to Item
         </Button>
       </div>
-      
+
       {error && (
         <Alert variant="destructive" className="mb-6">
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList className="grid grid-cols-4 w-full max-w-2xl">
           <TabsTrigger value="reasoner">
@@ -517,7 +579,7 @@ const ReasoningDashboard = () => {
             BOM Generator
           </TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="reasoner" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card>
@@ -530,8 +592,8 @@ const ReasoningDashboard = () => {
                     <label className="block text-sm font-medium mb-1">
                       Reasoner Type
                     </label>
-                    <Select 
-                      value={reasonerType} 
+                    <Select
+                      value={reasonerType}
                       onValueChange={setReasonerType}
                     >
                       <SelectTrigger>
@@ -540,33 +602,87 @@ const ReasoningDashboard = () => {
                       <SelectContent>
                         {availableReasoners.map(reasoner => (
                           <SelectItem key={reasoner.id} value={reasoner.id}>
-                            {reasoner.name}
+                            <div className="flex items-center justify-between w-full">
+                              <span>{reasoner.name}</span>
+                              <ReasonerPerformanceIndicator reasonerId={reasoner.id} />
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <p className="text-sm text-gray-500 mt-1">
-                      {availableReasoners.find(r => r.id === reasonerType)?.description || 
-                      'Select a reasoner to see its description'}
+                      {availableReasoners.find(r => r.id === reasonerType)?.description ||
+                        'Select a reasoner to see its description'}
                     </p>
+
+                    {/* Add performance warning for OWL reasoner */}
+                    {reasonerType === 'OWL' && (
+                      <Alert className="mt-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-sm">
+                          The full OWL reasoner may take longer for complex ontologies and could timeout.
+                          Consider using OWL_MINI for better performance.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
-                  
-                  <Button 
-                    onClick={performReasoning} 
-                    disabled={loading} 
+
+                  <Button
+                    onClick={performReasoning}
+                    disabled={loading}
                     variant="outline"
                     className="w-full"
                   >
                     {loading ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {loading ? 'Processing...' : 'Perform Reasoning'}
                   </Button>
+
+                  {/* Add estimated time indicator */}
+                  {loading && (
+                    <div className="text-xs text-center text-gray-500">
+                      This may take up to {
+                        reasonerType === 'OWL' ? '3 minutes' :
+                          reasonerType === 'ENHANCED_HYDRAULIC' ? '2 minutes' :
+                            reasonerType === 'OWL_MINI' || reasonerType === 'OWL_MICRO' ? '1 minute' :
+                              '30 seconds'
+                      } for complex ontologies
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
-            
+
             <div className="lg:col-span-2">
+              {/* Show warnings if any */}
+              {reasoningWarnings.length > 0 && (
+                <Alert className="mb-4" variant="default">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Reasoning Warnings</AlertTitle>
+                  <AlertDescription>
+                    <ul className="list-disc list-inside mt-2">
+                      {reasoningWarnings.map((warning, index) => (
+                        <li key={index} className="text-sm">{warning}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {reasoningResult ? (
-                <ReasonerResults result={reasoningResult} />
+                <>
+                  {/* Show actual reasoner used if different from requested */}
+                  {reasoningResult.reasonerUsed && reasoningResult.reasonerUsed !== reasonerType && (
+                    <Alert className="mb-4">
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        Used <strong>{reasoningResult.reasonerUsed}</strong> for this reasoning operation.
+                        {reasoningResult.modelSize && ` (Model size: ${reasoningResult.modelSize.toLocaleString()} statements)`}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <ReasonerResults result={reasoningResult} />
+                </>
               ) : (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center p-12 text-center">
@@ -575,20 +691,24 @@ const ReasoningDashboard = () => {
                     </div>
                     <h3 className="text-lg font-medium mb-2">No Reasoning Results</h3>
                     <p className="text-gray-500 mb-4">
-                      Select a reasoner type and click "Perform Reasoning" to analyze the ontology 
+                      Select a reasoner type and click "Perform Reasoning" to analyze the ontology
                       and generate inference results.
                     </p>
+                    <div className="text-sm text-gray-400">
+                      <p className="mb-1">💡 Tip: Start with OWL_MINI for balanced performance</p>
+                      <p>🏎️ Use RDFS for fastest results with basic reasoning</p>
+                    </div>
                   </CardContent>
                 </Card>
               )}
             </div>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="sparql" className="mt-6">
           <SparqlQueryPanel masterItemCode={masterItemCode || ''} />
         </TabsContent>
-        
+
         <TabsContent value="rules" className="mt-6">
           <CustomRulesPanel masterItemCode={masterItemCode || ''} />
         </TabsContent>
@@ -618,7 +738,7 @@ const ReasoningDashboard = () => {
                 Similar Items
               </TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="input" className="mt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
@@ -648,7 +768,7 @@ const ReasoningDashboard = () => {
                           </Button>
                         </div>
                       </div>
-                      
+
                       {codeValidation && (
                         <div className={`p-3 rounded-md ${codeValidation.isValid ? 'bg-green-50' : 'bg-red-50'}`}>
                           <div className="flex items-center mb-2">
@@ -661,7 +781,7 @@ const ReasoningDashboard = () => {
                               {codeValidation.message}
                             </span>
                           </div>
-                          
+
                           {codeValidation.isValid && (
                             <div className="grid grid-cols-2 gap-2 text-sm">
                               <div>
@@ -683,7 +803,7 @@ const ReasoningDashboard = () => {
                           )}
                         </div>
                       )}
-                      
+
                       <div className="grid gap-2">
                         <Label htmlFor="itemName">Cylinder Name</Label>
                         <Input
@@ -693,7 +813,7 @@ const ReasoningDashboard = () => {
                           placeholder="Enter cylinder name"
                         />
                       </div>
-                      
+
                       <div className="grid gap-2">
                         <Label htmlFor="itemSpec">Cylinder Specification</Label>
                         <Input
@@ -726,7 +846,7 @@ const ReasoningDashboard = () => {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardHeader>
                     <CardTitle>Code Format Guide</CardTitle>
@@ -773,7 +893,7 @@ const ReasoningDashboard = () => {
                 </Card>
               </div>
             </TabsContent>
-            
+
             <TabsContent value="components" className="mt-6">
               {generatedBom && (
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -800,8 +920,8 @@ const ReasoningDashboard = () => {
                             <div>
                               <span className="text-gray-500">Overall Score:</span>
                               <div className="font-medium">
-                                {generatedBom.overallRecommendationScore 
-                                  ? (generatedBom.overallRecommendationScore * 100).toFixed(1) 
+                                {generatedBom.overallRecommendationScore
+                                  ? (generatedBom.overallRecommendationScore * 100).toFixed(1)
                                   : 'N/A'}%
                               </div>
                             </div>
@@ -809,7 +929,7 @@ const ReasoningDashboard = () => {
                         </CardContent>
                       </Card>
                     )}
-                    
+
                     {generatedBom.componentCategories.map(category => (
                       <ComponentSelector
                         key={category.category}
@@ -821,7 +941,7 @@ const ReasoningDashboard = () => {
                       />
                     ))}
                   </div>
-                  
+
                   <div>
                     <Card className="sticky top-6">
                       <CardHeader>
@@ -846,7 +966,7 @@ const ReasoningDashboard = () => {
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           <Button
                             className="w-full"
                             onClick={exportBom}
@@ -865,7 +985,7 @@ const ReasoningDashboard = () => {
                               </>
                             )}
                           </Button>
-                          
+
                           <div className="text-xs text-gray-500">
                             <Info className="h-3 w-3 inline mr-1" />
                             Export includes selected components and quantities.
@@ -877,7 +997,7 @@ const ReasoningDashboard = () => {
                 </div>
               )}
             </TabsContent>
-            
+
             <TabsContent value="similar" className="mt-6">
               {generatedBom && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -888,7 +1008,7 @@ const ReasoningDashboard = () => {
                       onUseAsReference={() => handleUseAsReference(cylinder)}
                     />
                   ))}
-                  
+
                   {generatedBom.similarCylinders.length === 0 && (
                     <div className="col-span-full">
                       <Alert>
@@ -905,7 +1025,7 @@ const ReasoningDashboard = () => {
           </Tabs>
         </TabsContent>
       </Tabs>
-      
+
       {reasoningResult && reasoningResult.bomHierarchy && (
         <Card className="mt-6">
           <CardHeader>

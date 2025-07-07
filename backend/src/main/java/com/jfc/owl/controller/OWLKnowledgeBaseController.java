@@ -141,7 +141,9 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 
 	/**
 	 * 搜索知識庫條目
+	 * move to KnowledgeBaseSearchController
 	 */
+	/*
 	@GetMapping("/search")
 	public ResponseEntity<ApiResponse<List<OWLKnowledgeBase>>> searchKnowledgeBase(@RequestParam String keyword) {
 		try {
@@ -151,7 +153,7 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 			logger.error("Error searching knowledge base", e);
 			return error("Failed to search knowledge base: " + e.getMessage());
 		}
-	}
+	}*/
 
 	/**
 	 * 獲取知識庫中的OWL模型（用於BOM生成）

@@ -1,5 +1,7 @@
 package com.jfc.owl.service;
 
+import com.jfc.owl.dto.search.SearchRequestDTO.SearchOptions;
+import com.jfc.owl.dto.search.SearchRequestDTO.SearchType;
 import com.jfc.owl.entity.OWLKnowledgeBase;
 import com.jfc.owl.repository.OWLKnowledgeBaseRepository;
 import org.apache.jena.ontology.OntModel;
@@ -657,6 +659,19 @@ public class OWLKnowledgeBaseServiceMock implements OWLKnowledgeBaseService {
 
 	@Override
 	public Map<String, Object> cancelBatchExport(String batchId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Map<String, Object>> searchSimilarBOMs(Map<String, String> specifications, SearchOptions options) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Map<String, Object>> searchSimilarBOMs(Map<String, String> specifications, SearchOptions options,
+			SearchType searchType) {
 		// TODO Auto-generated method stub
 		return null;
 	}

@@ -161,6 +161,8 @@ public class SearchRequestDTO {
         private int pageSize = 20;
     }
     
+    
+    
     /**
      * Enum for sort orders
      */
