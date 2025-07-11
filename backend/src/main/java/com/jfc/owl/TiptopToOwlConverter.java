@@ -38,14 +38,15 @@ public class TiptopToOwlConverter {
 	private DatatypeProperty characteristicCode;
 
 	// New properties for masterItems starting with 3 or 4
-	private DatatypeProperty bore;
-	private DatatypeProperty stroke;
-	private DatatypeProperty rodeEndType;
-	private DatatypeProperty series;
-	private DatatypeProperty type;
-	private DatatypeProperty installation;
-	private DatatypeProperty shaftEndJoin;
-	private DatatypeProperty accessories;
+	private DatatypeProperty series;//第3-4碼
+	private DatatypeProperty type;//第5碼
+	private DatatypeProperty bore; //第6-8碼
+	private DatatypeProperty rodeEndType;//第9碼
+	private DatatypeProperty stroke;//第11-15碼
+	private DatatypeProperty accessories;//第16碼
+	private DatatypeProperty installation;//FA, CA, CB
+	private DatatypeProperty shaftEndJoin;//Y, I
+	
 
 	public TiptopToOwlConverter() {
 		initializeOntology();
@@ -193,31 +194,31 @@ public class TiptopToOwlConverter {
 
 			// Extract properties from masterItemCode
 			if (masterItemCode.length() >= 8) {
-				String boreValue = masterItemCode.substring(5, 8);
-				masterItem.addProperty(bore, boreValue);
-			}
-
-			if (masterItemCode.length() >= 15) {
-				String strokeValue = masterItemCode.substring(10, 14);
-				masterItem.addProperty(stroke, strokeValue);
-
-				// RodeEndType is the 15th character
-				String rodeEndValue = masterItemCode.substring(14, 15);
-				masterItem.addProperty(rodeEndType, rodeEndValue);
-
-				// Accessories is the 16th character.
-				String accessories = masterItemCode.substring(15, 16);
-
-			}
-
-			if (masterItemCode.length() >= 5) {
 				String seriesValue = masterItemCode.substring(2, 4);
 				masterItem.addProperty(series, seriesValue);
 
 				// Type is the 5th character
 				String typeValue = masterItemCode.substring(4, 5);
 				masterItem.addProperty(type, typeValue);
+				
+				String boreValue = masterItemCode.substring(5, 8);
+				masterItem.addProperty(bore, boreValue);
+				
+				// RodeEndType is the 9th character F:内牙 E:外牙 N:轴脖子 T:轴端特殊 G:轴端光杆 W:无轴
+				String rodeEndValue = masterItemCode.substring(8, 9);
+				masterItem.addProperty(rodeEndType, rodeEndValue);
 			}
+
+			if (masterItemCode.length() >= 15) {
+				String strokeValue = masterItemCode.substring(10, 14);//暫時不取小數10~14
+				masterItem.addProperty(stroke, strokeValue);				
+
+				// Accessories is the 16th character.
+				String accessoriesValue = masterItemCode.substring(15, 16);
+				masterItem.addProperty(accessories, accessoriesValue);	
+			}
+
+			
 		}
 
 		// Process each component

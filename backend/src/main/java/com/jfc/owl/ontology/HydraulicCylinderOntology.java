@@ -485,7 +485,7 @@ public class HydraulicCylinderOntology {
 		addCardinalityConstraints();
 
 		// Add value restrictions
-		addValueRestrictions();
+		//addValueRestrictions();
 
 		// Add disjoint classes
 		addDisjointClasses();
@@ -585,23 +585,43 @@ public class HydraulicCylinderOntology {
 	 * Add equivalent classes based on specifications
 	 */
 	private void addEquivalentClasses() {
-		// Create equivalent class for standard series (series = "10")
-		Restriction standardSeriesRestriction = ontModel.createHasValueRestriction(null, properties.get("series"),
-				ontModel.createTypedLiteral("10"));
+		/*
+		// Create equivalent class for standard series (series = "22,24,26")
+		UnionClass standardSeriesUnion = ontModel.createUnionClass(null, ontModel.createList(new RDFNode[] {
+				createSeriesRestriction("22"), createSeriesRestriction("24"), createSeriesRestriction("26") }));
 		classes.get("StandardCylinder").addEquivalentClass(ontModel.createIntersectionClass(null,
-				ontModel.createList(new RDFNode[] { classes.get("HydraulicCylinder"), standardSeriesRestriction })));
+				ontModel.createList(new RDFNode[] { classes.get("HydraulicCylinder"), standardSeriesUnion })));
 
-		// Create equivalent class for heavy duty series (series = "11")
+		// Create equivalent class for LightDuty series (series = "21,23,25")
+		UnionClass lightDutySeriesUnion = ontModel.createUnionClass(null, ontModel.createList(new RDFNode[] {
+				createSeriesRestriction("21"), createSeriesRestriction("23"), createSeriesRestriction("25") }));
+		classes.get("LightDutyCylinder").addEquivalentClass(ontModel.createIntersectionClass(null,
+				ontModel.createList(new RDFNode[] { classes.get("HydraulicCylinder"), lightDutySeriesUnion })));
+
+		// Create equivalent class for Compact series (series = "33,34,35,36")
+		UnionClass compactSeriesUnion = ontModel.createUnionClass(null,
+				ontModel.createList(new RDFNode[] { createSeriesRestriction("33"), createSeriesRestriction("34"),
+						createSeriesRestriction("35"), createSeriesRestriction("36") }));
+		classes.get("CompactCylinder").addEquivalentClass(ontModel.createIntersectionClass(null,
+				ontModel.createList(new RDFNode[] { classes.get("HydraulicCylinder"), compactSeriesUnion })));
+
+		// Create equivalent class for heavy duty series (series = "32")
 		Restriction heavyDutySeriesRestriction = ontModel.createHasValueRestriction(null, properties.get("series"),
-				ontModel.createTypedLiteral("11"));
+				ontModel.createTypedLiteral("32"));
 		classes.get("HeavyDutyCylinder").addEquivalentClass(ontModel.createIntersectionClass(null,
 				ontModel.createList(new RDFNode[] { classes.get("HydraulicCylinder"), heavyDutySeriesRestriction })));
-
+		// 不使用等價類來定義系列關係，因為已經在 classifyCylinderBySpecifications 中處理了
+    // 只保留 rod end type 的等價類定義
+		*/
 		// Create equivalent class for yoke rod end (rodEndType = "Y")
 		Restriction yokeRodEndRestriction = ontModel.createHasValueRestriction(null, properties.get("rodEndType"),
 				ontModel.createTypedLiteral("Y"));
 		classes.get("YokeRodEndCylinder").addEquivalentClass(ontModel.createIntersectionClass(null,
 				ontModel.createList(new RDFNode[] { classes.get("HydraulicCylinder"), yokeRodEndRestriction })));
+	}
+
+	private Restriction createSeriesRestriction(String series) {
+		return ontModel.createHasValueRestriction(null, properties.get("series"), ontModel.createTypedLiteral(series));
 	}
 
 	/**
@@ -721,21 +741,28 @@ public class HydraulicCylinderOntology {
 			}
 		}
 
-		// Classify by series
+		// Classify by series axmi120
 		if (specifications.containsKey("series")) {
 			String series = specifications.get("series");
 			switch (series) {
-			case "10":
+			case "21":
+			case "25":
+			case "23":
+				cylinder.addRDFType(classes.get("LightDutyCylinder"));
+				break;
+			case "22":
+			case "26":
+			case "24":
 				cylinder.addRDFType(classes.get("StandardCylinder"));
 				break;
-			case "11":
-				cylinder.addRDFType(classes.get("HeavyDutyCylinder"));
-				break;
-			case "12":
+			case "33":
+			case "34":
+			case "35":
+			case "36":
 				cylinder.addRDFType(classes.get("CompactCylinder"));
 				break;
-			case "13":
-				cylinder.addRDFType(classes.get("LightDutyCylinder"));
+			case "32":
+				cylinder.addRDFType(classes.get("HeavyDutyCylinder"));
 				break;
 			}
 		}
@@ -896,11 +923,12 @@ public class HydraulicCylinderOntology {
 
 		String bore = specs.get("bore");
 		String series = specs.get("series");
+		String type = specs.get("type");
 
 		if (bore != null && series != null) {
 			ComponentSuggestion piston = new ComponentSuggestion();
 			piston.setCategory("Piston");
-			piston.setCode(generateComponentCode("21", series, bore, "P01"));
+			piston.setCode(generateComponentCode("1S", "011", bore, series + type));
 			piston.setName(String.format("Piston %smm - Series %s", bore, series));
 			piston.setDescription(String.format("Standard piston for %smm bore hydraulic cylinder", bore));
 			piston.setQuantity(1);
@@ -908,10 +936,10 @@ public class HydraulicCylinderOntology {
 			suggestions.add(piston);
 
 			// Add high-performance piston for heavy-duty series
-			if ("11".equals(series)) {
+			if ("32".equals(series)) {
 				ComponentSuggestion heavyDutyPiston = new ComponentSuggestion();
 				heavyDutyPiston.setCategory("Piston");
-				heavyDutyPiston.setCode(generateComponentCode("21", series, bore, "P02"));
+				heavyDutyPiston.setCode(generateComponentCode("1S", "011", bore, series + type));
 				heavyDutyPiston.setName(String.format("Heavy Duty Piston %smm - Series %s", bore, series));
 				heavyDutyPiston.setDescription("Reinforced piston for high-pressure applications");
 				heavyDutyPiston.setQuantity(1);
@@ -924,23 +952,26 @@ public class HydraulicCylinderOntology {
 	}
 
 	/**
-	 * Generate piston rod component suggestions
+	 * Generate piston rod component suggestions 2S016BBBSSSSXPPT0000
+	 * 2S0160800300121A0000
 	 */
 	private List<ComponentSuggestion> generatePistonRodSuggestions(Map<String, String> specs) {
 		List<ComponentSuggestion> suggestions = new ArrayList<>();
 
 		String bore = specs.get("bore");
+		String stroke = specs.get("stroke");
 		String series = specs.get("series");
+		String type = specs.get("type");
 		String rodEndType = specs.get("rodEndType");
 
 		if (bore != null && series != null) {
 			// Calculate standard rod diameter (typically 0.5-0.7 times bore)
 			int boreSize = Integer.parseInt(bore);
-			int rodDiameter = (int) (boreSize * 0.6);
+			int rodDiameter = (int) (boreSize * 0.5);
 
 			ComponentSuggestion pistonRod = new ComponentSuggestion();
 			pistonRod.setCategory("PistonRod");
-			pistonRod.setCode(generateComponentCode("21", series, String.format("%03d", rodDiameter), "R01"));
+			pistonRod.setCode(generateComponentCode("2S", "016", bore, stroke + "-" + series + type + "0000"));
 			pistonRod.setName(String.format("Piston Rod Ø%dmm for %smm Bore", rodDiameter, bore));
 			pistonRod.setDescription(
 					String.format("Standard piston rod with %s end connection", getRodEndDescription(rodEndType)));
@@ -949,14 +980,17 @@ public class HydraulicCylinderOntology {
 			suggestions.add(pistonRod);
 
 			// Add chrome-plated version for better wear resistance
-			ComponentSuggestion chromePlatedRod = new ComponentSuggestion();
-			chromePlatedRod.setCategory("PistonRod");
-			chromePlatedRod.setCode(generateComponentCode("21", series, String.format("%03d", rodDiameter), "R02"));
-			chromePlatedRod.setName(String.format("Chrome-Plated Rod Ø%dmm for %smm Bore", rodDiameter, bore));
-			chromePlatedRod.setDescription("Chrome-plated piston rod for extended service life");
-			chromePlatedRod.setQuantity(1);
-			chromePlatedRod.setCompatibilityScore(0.95);
-			suggestions.add(chromePlatedRod);
+			/*
+			 * 2025-07-10 mark ComponentSuggestion chromePlatedRod = new
+			 * ComponentSuggestion(); chromePlatedRod.setCategory("PistonRod");
+			 * chromePlatedRod.setCode(generateComponentCode("21", series,
+			 * String.format("%03d", rodDiameter), "R02"));
+			 * chromePlatedRod.setName(String.format("Chrome-Plated Rod Ø%dmm for %smm Bore"
+			 * , rodDiameter, bore)); chromePlatedRod.
+			 * setDescription("Chrome-plated piston rod for extended service life");
+			 * chromePlatedRod.setQuantity(1); chromePlatedRod.setCompatibilityScore(0.95);
+			 * suggestions.add(chromePlatedRod);
+			 */
 		}
 
 		return suggestions;
@@ -1021,36 +1055,51 @@ public class HydraulicCylinderOntology {
 	}
 
 	/**
-	 * Generate end cap component suggestions
+	 * Generate end cap component suggestions 1S00108021A0000 HC_C_前蓋 B80 (C級)
+	 * 1S00608021A0003 HC_後蓋 B80 (口110x52L)
 	 */
 	private List<ComponentSuggestion> generateEndCapSuggestions(Map<String, String> specs) {
 		List<ComponentSuggestion> suggestions = new ArrayList<>();
 
 		String bore = specs.get("bore");
 		String series = specs.get("series");
+		String type = specs.get("type");
 		String installationType = specs.get("installationType");
 
-		if (bore != null && series != null) {
-			// Head end cap
-			ComponentSuggestion headEndCap = new ComponentSuggestion();
-			headEndCap.setCategory("EndCap");
-			headEndCap.setCode(generateComponentCode("22", series, bore, "C01"));
-			headEndCap.setName(
-					String.format("Head End Cap %smm - %s", bore, getInstallationDescription(installationType)));
-			headEndCap.setDescription("Head end cap with integrated mounting features");
-			headEndCap.setQuantity(1);
-			headEndCap.setCompatibilityScore(1.0);
-			suggestions.add(headEndCap);
+		if (bore != null && series != null && type != null) {
+			if ("C".equals(type.toUpperCase()) || "D".equals(type.toUpperCase())) {
+				// Head end cap
+				ComponentSuggestion headEndCap = new ComponentSuggestion();
+				headEndCap.setCategory("EndCap");
+				headEndCap.setCode(generateComponentCode("1S", "001", bore, series + type));
+				headEndCap.setName(
+						String.format("Head End Cap %smm - %s", bore, getInstallationDescription(installationType)));
+				headEndCap.setDescription("Head end cap with integrated mounting features");
+				headEndCap.setQuantity(2);
+				headEndCap.setCompatibilityScore(1.0);
+				suggestions.add(headEndCap);
+			} else {
+				// Head end cap
+				ComponentSuggestion headEndCap = new ComponentSuggestion();
+				headEndCap.setCategory("EndCap");
+				headEndCap.setCode(generateComponentCode("1S", "001", bore, series + type));
+				headEndCap.setName(
+						String.format("Head End Cap %smm - %s", bore, getInstallationDescription(installationType)));
+				headEndCap.setDescription("Head end cap with integrated mounting features");
+				headEndCap.setQuantity(1);
+				headEndCap.setCompatibilityScore(1.0);
+				suggestions.add(headEndCap);
 
-			// Rod end cap
-			ComponentSuggestion rodEndCap = new ComponentSuggestion();
-			rodEndCap.setCategory("EndCap");
-			rodEndCap.setCode(generateComponentCode("22", series, bore, "C02"));
-			rodEndCap.setName(String.format("Rod End Cap %smm", bore));
-			rodEndCap.setDescription("Rod end cap with integrated rod seal housing");
-			rodEndCap.setQuantity(1);
-			rodEndCap.setCompatibilityScore(1.0);
-			suggestions.add(rodEndCap);
+				// Rod end cap
+				ComponentSuggestion rodEndCap = new ComponentSuggestion();
+				rodEndCap.setCategory("EndCap");
+				rodEndCap.setCode(generateComponentCode("1S", "006", bore, series + type));
+				rodEndCap.setName(String.format("Rod End Cap %smm", bore));
+				rodEndCap.setDescription("Rod end cap with integrated rod seal housing");
+				rodEndCap.setQuantity(1);
+				rodEndCap.setCompatibilityScore(1.0);
+				suggestions.add(rodEndCap);
+			}
 		}
 
 		return suggestions;
@@ -1134,7 +1183,8 @@ public class HydraulicCylinderOntology {
 	}
 
 	/**
-	 * Generate component code based on specifications
+	 * Generate component code based on specifications Piston prefix=1S, series=011,
+	 * bore=050, suffix=21A
 	 */
 	private String generateComponentCode(String prefix, String series, String bore, String suffix) {
 		return String.format("%s%s%s-%s", prefix, series, bore, suffix);
@@ -1237,7 +1287,7 @@ public class HydraulicCylinderOntology {
 		if (series == null || series.isEmpty()) {
 			errors.add("Series is required");
 		} else if (!isValidSeries(series)) {
-			warnings.add("Unknown series: " + series + ". Standard series are 21, 22, 23, 24, 25, 26");
+			warnings.add("Unknown series: " + series + ". Standard series are 21-26, 32-36");
 		}
 
 		// Validate rod end type
@@ -1257,7 +1307,7 @@ public class HydraulicCylinderOntology {
 	 * Check if series is valid
 	 */
 	private boolean isValidSeries(String series) {
-		return series.matches("^(21|22|23|24|25|26)$");
+		return series.matches("^(21|22|23|24|25|26|32|33|34|35|36)$");
 	}
 
 	/**
@@ -1300,7 +1350,7 @@ public class HydraulicCylinderOntology {
 	 */
 	public Map<String, OntProperty> getDomainProperties() {
 		ensureModelValid();
-		
+
 		lock.readLock().lock();
 		try {
 			return new HashMap<>(properties);
@@ -1314,18 +1364,18 @@ public class HydraulicCylinderOntology {
 	 */
 	public void exportOntology(String filePath, String format) {
 		ensureModelValid();
-		
+
 		lock.readLock().lock();
-        try {
-            logger.info("Exporting hydraulic cylinder ontology to: {}", filePath);
-            ontModel.write(new java.io.FileOutputStream(filePath), format);
-            logger.info("Ontology exported successfully");
-        } catch (Exception e) {
-            logger.error("Error exporting ontology: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to export ontology", e);
-        } finally {
-            lock.readLock().unlock();
-        }
+		try {
+			logger.info("Exporting hydraulic cylinder ontology to: {}", filePath);
+			ontModel.write(new java.io.FileOutputStream(filePath), format);
+			logger.info("Ontology exported successfully");
+		} catch (Exception e) {
+			logger.error("Error exporting ontology: {}", e.getMessage(), e);
+			throw new RuntimeException("Failed to export ontology", e);
+		} finally {
+			lock.readLock().unlock();
+		}
 	}
 
 	/**
