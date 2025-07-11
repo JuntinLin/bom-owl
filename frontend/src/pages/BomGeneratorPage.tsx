@@ -966,9 +966,9 @@ const BomGeneratorPage = () => {
                   <div>
                     <h3 className="text-lg font-medium mb-2">Code Format</h3>
                     <div className="bg-gray-100 p-3 rounded-md font-mono text-sm mb-2">
-                      <span className="text-blue-600">4</span>
+                      <span className="text-blue-600">4_</span>
                       <span className="text-green-600">12</span>
-                      <span className="text-yellow-600">F</span>
+                      <span className="text-yellow-600">A</span>
                       <span className="text-red-600">050</span>
                       <span className="text-gray-400">-</span>
                       <span className="text-purple-600">0146</span>
@@ -985,7 +985,7 @@ const BomGeneratorPage = () => {
                       </div>
                       <div>
                         <span className="inline-block w-3 h-3 bg-yellow-600 mr-1"></span>
-                        <span>Type (e.g. F)</span>
+                        <span>Type (e.g. A/C/D)</span>
                       </div>
                       <div>
                         <span className="inline-block w-3 h-3 bg-red-600 mr-1"></span>

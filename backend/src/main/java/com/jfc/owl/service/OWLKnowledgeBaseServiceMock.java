@@ -675,5 +675,17 @@ public class OWLKnowledgeBaseServiceMock implements OWLKnowledgeBaseService {
 		// TODO Auto-generated method stub
 		return null;
 	}
+
+	@Override
+	public Map<String, Object> updateHydraulicCylinderSpecifications() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public OWLKnowledgeBase updateSingleItemSpecifications(String masterItemCode) {
+		// TODO Auto-generated method stub
+		return null;
+	}
     
 }

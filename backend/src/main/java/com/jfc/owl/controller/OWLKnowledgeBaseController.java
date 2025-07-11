@@ -325,4 +325,136 @@ public class OWLKnowledgeBaseController extends AbstractDTOController<ImaFile> {
 			return success(new ArrayList<ProcessingLogDTO>());
 		}
 	}
+	
+	// Add these methods to your existing OWLKnowledgeBaseController class:
+
+	/**
+	 * Update hydraulic cylinder specifications for all existing entries
+	 * This endpoint updates the specifications without re-exporting from ERP
+	 */
+	@PostMapping("/update-hydraulic-specs")
+	public ResponseEntity<ApiResponse<Map<String, Object>>> updateHydraulicSpecs() {
+	    try {
+	        logger.info("Starting hydraulic cylinder specifications update");
+	        Map<String, Object> result = knowledgeBaseService.updateHydraulicCylinderSpecifications();
+	        
+	        // Log the results
+	        logger.info("Update completed - Updated: {}, Failed: {}", 
+	            result.get("updatedCount"), result.get("failedCount"));
+	        
+	        return success(result);
+	    } catch (Exception e) {
+	        logger.error("Error updating hydraulic cylinder specifications", e);
+	        return error("Failed to update hydraulic cylinder specifications: " + e.getMessage());
+	    }
+	}
+
+	/**
+	 * Update specifications for a single item
+	 * This endpoint updates specifications for a specific master item code
+	 */
+	@PostMapping("/update-specs/{masterItemCode}")
+	public ResponseEntity<ApiResponse<OWLKnowledgeBase>> updateSingleItemSpecs(
+	        @PathVariable String masterItemCode) {
+	    try {
+	        logger.info("Updating specifications for item: {}", masterItemCode);
+	        OWLKnowledgeBase updated = knowledgeBaseService.updateSingleItemSpecifications(masterItemCode);
+	        
+	        logger.info("Successfully updated specifications for item: {}", masterItemCode);
+	        return success(updated);
+	    } catch (Exception e) {
+	        logger.error("Error updating specifications for item: {}", masterItemCode, e);
+	        return error("Failed to update specifications: " + e.getMessage());
+	    }
+	}
+
+	/**
+	 * Get hydraulic cylinder update status
+	 * This endpoint provides information about the current state of hydraulic cylinders in the knowledge base
+	 */
+	@GetMapping("/hydraulic-specs-status")
+	public ResponseEntity<ApiResponse<Map<String, Object>>> getHydraulicSpecsStatus() {
+	    try {
+	        Map<String, Object> status = new HashMap<>();
+	        
+	        // Get statistics from the service
+	        Map<String, Object> stats = knowledgeBaseService.getKnowledgeBaseStatistics();
+	        
+	        status.put("totalHydraulicCylinders", stats.get("hydraulicCylinderCount"));
+	        status.put("totalEntries", stats.get("totalEntries"));
+	        status.put("hydraulicCylinderPercentage", stats.get("hydraulicCylinderPercentage"));
+	        status.put("lastUpdate", LocalDateTime.now());
+	        status.put("ready", true);
+	        status.put("message", "Ready to update hydraulic cylinder specifications");
+	        
+	        return success(status);
+	    } catch (Exception e) {
+	        logger.error("Error getting hydraulic specs status", e);
+	        return error("Failed to get hydraulic specs status: " + e.getMessage());
+	    }
+	}
+
+	/**
+	 * Preview what would be updated
+	 * This endpoint shows a preview of items that would be updated without actually updating them
+	 */
+	@GetMapping("/preview-hydraulic-updates")
+	public ResponseEntity<ApiResponse<Map<String, Object>>> previewHydraulicUpdates(
+	        @RequestParam(defaultValue = "10") int limit) {
+	    try {
+	        logger.info("Previewing hydraulic cylinder updates with limit: {}", limit);
+	        
+	        // This is a simplified preview - you might want to add a proper preview method to the service
+	        List<OWLKnowledgeBase> entries = knowledgeBaseService.searchKnowledgeBase("3");
+	        
+	        List<Map<String, Object>> preview = entries.stream()
+	            .filter(kb -> kb.getMasterItemCode() != null && kb.getMasterItemCode().startsWith("3"))
+	            .limit(limit)
+	            .map(kb -> {
+	                Map<String, Object> item = new HashMap<>();
+	                item.put("masterItemCode", kb.getMasterItemCode());
+	                item.put("currentSpecs", kb.getHydraulicCylinderSpecs());
+	                item.put("isHydraulicCylinder", kb.getIsHydraulicCylinder());
+	                
+	                // Extract what the new specs would be
+	                try {
+	                    // This would use the same logic as extractSpecificationsFromCode
+	                    String code = kb.getMasterItemCode();
+	                    Map<String, String> newSpecs = new HashMap<>();
+	                    if (code.length() >= 4) {
+	                        newSpecs.put("series", code.substring(2, 4));
+	                    }
+	                    if (code.length() >= 5) {
+	                        newSpecs.put("type", code.substring(4, 5)); // This is the new field
+	                    }
+	                    if (code.length() >= 8) {
+	                        newSpecs.put("bore", String.valueOf(Integer.parseInt(code.substring(5, 8))));
+	                    }
+	                    if (code.length() >= 14) {
+	                        newSpecs.put("stroke", String.valueOf(Integer.parseInt(code.substring(10, 14))));
+	                    }
+	                    if (code.length() >= 15) {
+	                        newSpecs.put("rodEndType", code.substring(14, 15));
+	                    }
+	                    item.put("newSpecs", newSpecs);
+	                    item.put("wouldUpdate", !kb.getHydraulicCylinderSpecs().contains("\"type\""));
+	                } catch (Exception e) {
+	                    item.put("error", "Error parsing specifications");
+	                }
+	                
+	                return item;
+	            })
+	            .collect(Collectors.toList());
+	        
+	        Map<String, Object> result = new HashMap<>();
+	        result.put("preview", preview);
+	        result.put("totalToUpdate", preview.stream().filter(item -> (Boolean) item.get("wouldUpdate")).count());
+	        result.put("limit", limit);
+	        
+	        return success(result);
+	    } catch (Exception e) {
+	        logger.error("Error previewing hydraulic updates", e);
+	        return error("Failed to preview updates: " + e.getMessage());
+	    }
+	}
 }

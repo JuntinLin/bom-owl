@@ -1768,7 +1768,7 @@ public class EnhancedHydraulicCylinderRules {
                                                          CylinderSpecs specs, double similarityScore) {
         Map<String, Object> info = new HashMap<>();
         info.put("code", specs.itemCode);
-        info.put("similarityScore", Math.round(similarityScore * 100));
+        info.put("similarityScore", Math.round(similarityScore * 100.0) / 100.0);
         
         // Get additional information
         StmtIterator nameStmts = infModel.listStatements(cylinder, 

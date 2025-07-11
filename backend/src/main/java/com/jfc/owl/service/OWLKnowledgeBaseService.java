@@ -187,4 +187,22 @@ public interface OWLKnowledgeBaseService {
      * 取消批次處理
      */
     Map<String, Object> cancelBatchExport(String batchId);
+    
+ // Add these methods to your OWLKnowledgeBaseService interface:
+
+    /**
+     * Update hydraulic cylinder specifications for all existing entries
+     * This method updates the specs without re-exporting from ERP
+     * 
+     * @return Update results including success/failure counts
+     */
+    Map<String, Object> updateHydraulicCylinderSpecifications();
+
+    /**
+     * Update specifications for a single item
+     * 
+     * @param masterItemCode The master item code to update
+     * @return The updated OWLKnowledgeBase entity
+     */
+    OWLKnowledgeBase updateSingleItemSpecifications(String masterItemCode);
 }

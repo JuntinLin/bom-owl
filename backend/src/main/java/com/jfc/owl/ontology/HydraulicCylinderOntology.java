@@ -491,7 +491,7 @@ public class HydraulicCylinderOntology {
 		addDisjointClasses();
 
 		// Add equivalent classes
-		addEquivalentClasses();
+		//addEquivalentClasses();
 
 		// Add functional properties
 		addFunctionalProperties();

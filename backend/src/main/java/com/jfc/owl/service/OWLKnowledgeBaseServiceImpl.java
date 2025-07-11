@@ -907,6 +907,134 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 		return result;
 	}
 
+	
+	/**
+	 * Update hydraulic cylinder specifications for existing entries
+	 * This method updates the specs without re-exporting from ERP
+	 */
+	@Override
+	@Transactional
+	public Map<String, Object> updateHydraulicCylinderSpecifications() {
+	    logger.info("Updating hydraulic cylinder specifications for existing entries");
+	    
+	    Map<String, Object> result = new HashMap<>();
+	    List<String> updatedItems = new ArrayList<>();
+	    List<String> failedItems = new ArrayList<>();
+	    
+	    try {
+	        // Get all hydraulic cylinder entries
+	        List<OWLKnowledgeBase> hydraulicCylinders = knowledgeBaseRepository
+	            .findByActiveTrueAndIsHydraulicCylinderTrue();
+	        
+	        logger.info("Found {} hydraulic cylinder entries to update", hydraulicCylinders.size());
+	        
+	        for (OWLKnowledgeBase kb : hydraulicCylinders) {
+	            try {
+	                String masterItemCode = kb.getMasterItemCode();
+	                
+	                // Re-extract specifications with the new type field
+	                Map<String, String> updatedSpecs = extractSpecificationsFromCode(masterItemCode);
+	                
+	                // Convert to JSON
+	                String specsJson = convertSpecsToJson(updatedSpecs);
+	                
+	                // Update only if specs have changed
+	                if (!specsJson.equals(kb.getHydraulicCylinderSpecs())) {
+	                    kb.setHydraulicCylinderSpecs(specsJson);
+	                    kb.setUpdatedAt(LocalDateTime.now());
+	                    
+	                    knowledgeBaseRepository.save(kb);
+	                    updatedItems.add(masterItemCode);
+	                    
+	                    logger.debug("Updated specs for {}: {}", masterItemCode, specsJson);
+	                }
+	                
+	            } catch (Exception e) {
+	                logger.error("Error updating specs for {}: {}", kb.getMasterItemCode(), e.getMessage());
+	                failedItems.add(kb.getMasterItemCode());
+	            }
+	        }
+	        
+	        // Also check non-hydraulic items that might be hydraulic cylinders
+	        List<OWLKnowledgeBase> potentialHydraulicCylinders = knowledgeBaseRepository
+	            .findByActiveTrue()
+	            .stream()
+	            .filter(kb -> kb.getIsHydraulicCylinder() == null || !kb.getIsHydraulicCylinder())
+	            .filter(kb -> isHydraulicCylinderItem(kb.getMasterItemCode()))
+	            .collect(Collectors.toList());
+	        
+	        logger.info("Found {} potential hydraulic cylinders to check", potentialHydraulicCylinders.size());
+	        
+	        for (OWLKnowledgeBase kb : potentialHydraulicCylinders) {
+	            try {
+	                String masterItemCode = kb.getMasterItemCode();
+	                Map<String, String> specs = extractSpecificationsFromCode(masterItemCode);
+	                
+	                if (!specs.isEmpty()) {
+	                    kb.setIsHydraulicCylinder(true);
+	                    kb.setHydraulicCylinderSpecs(convertSpecsToJson(specs));
+	                    kb.setUpdatedAt(LocalDateTime.now());
+	                    
+	                    knowledgeBaseRepository.save(kb);
+	                    updatedItems.add(masterItemCode);
+	                    
+	                    logger.info("Identified and updated hydraulic cylinder: {}", masterItemCode);
+	                }
+	                
+	            } catch (Exception e) {
+	                logger.error("Error checking potential hydraulic cylinder {}: {}", 
+	                    kb.getMasterItemCode(), e.getMessage());
+	                failedItems.add(kb.getMasterItemCode());
+	            }
+	        }
+	        
+	        result.put("totalProcessed", hydraulicCylinders.size() + potentialHydraulicCylinders.size());
+	        result.put("updatedCount", updatedItems.size());
+	        result.put("failedCount", failedItems.size());
+	        result.put("updatedItems", updatedItems);
+	        result.put("failedItems", failedItems);
+	        result.put("message", String.format("Updated %d hydraulic cylinder specifications", updatedItems.size()));
+	        
+	        logger.info("Hydraulic cylinder specification update completed: {} updated, {} failed", 
+	            updatedItems.size(), failedItems.size());
+	        
+	    } catch (Exception e) {
+	        logger.error("Error updating hydraulic cylinder specifications", e);
+	        result.put("error", e.getMessage());
+	        throw new RuntimeException("Failed to update hydraulic cylinder specifications", e);
+	    }
+	    
+	    return result;
+	}
+
+	/**
+	 * Update specifications for a single item
+	 */
+	@Override
+	@Transactional
+	public OWLKnowledgeBase updateSingleItemSpecifications(String masterItemCode) {
+	    logger.info("Updating specifications for item: {}", masterItemCode);
+	    
+	    Optional<OWLKnowledgeBase> existing = knowledgeBaseRepository
+	        .findByMasterItemCodeAndActiveTrue(masterItemCode);
+	    
+	    if (existing.isPresent()) {
+	        OWLKnowledgeBase kb = existing.get();
+	        
+	        // Check if it's a hydraulic cylinder
+	        if (isHydraulicCylinderItem(masterItemCode)) {
+	            Map<String, String> specs = extractSpecificationsFromCode(masterItemCode);
+	            
+	            kb.setIsHydraulicCylinder(true);
+	            kb.setHydraulicCylinderSpecs(convertSpecsToJson(specs));
+	            kb.setUpdatedAt(LocalDateTime.now());
+	            
+	            return knowledgeBaseRepository.save(kb);
+	        }
+	    }
+	    
+	    throw new RuntimeException("Knowledge base entry not found for item: " + masterItemCode);
+	}
 	// ==================== 私有輔助方法 ====================
 
 	private void createDirectories() {
@@ -1150,6 +1278,11 @@ public class OWLKnowledgeBaseServiceImpl implements OWLKnowledgeBaseService {
 			// Extract series (positions 3-4)
 			if (itemCode.length() >= 4) {
 				specs.put("series", itemCode.substring(2, 4));
+			}
+			
+			// Extract type (positions 5)
+			if (itemCode.length() >= 5) {
+				specs.put("type", itemCode.substring(4, 5));
 			}
 
 			// Extract bore (positions 6-8)

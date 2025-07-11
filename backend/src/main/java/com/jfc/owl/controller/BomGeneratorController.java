@@ -186,8 +186,8 @@ public class BomGeneratorController extends AbstractDTOController<ImaFile> {
                 specs = Map.of(
                     "series", itemCode.substring(2, 4),
                     "type", itemCode.substring(4, 5),
-                    "bore", itemCode.substring(5, 8),
-                    "stroke", itemCode.substring(10, 14),
+                    "bore", removeLeadingZeros(itemCode.substring(5, 8)),
+                    "stroke", removeLeadingZeros(itemCode.substring(10, 14)),
                     "rodEndType", itemCode.substring(14, 15)
                 );
             }
@@ -205,5 +205,11 @@ public class BomGeneratorController extends AbstractDTOController<ImaFile> {
             logger.error("Error validating cylinder code", e);
             return error("Error validating cylinder code: " + e.getMessage());
         }
+    }
+    
+    private String removeLeadingZeros(String str) {
+        // 防止空字串或全為 0 的情況
+        String result = str.replaceFirst("^0+", "");
+        return result.isEmpty() ? "0" : result;
     }
 }
