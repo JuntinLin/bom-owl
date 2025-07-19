@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/gnn/bom")
+@RequestMapping("/gnn/bom")
 public class BomGnnController {
     
     @Autowired

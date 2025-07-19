@@ -4,8 +4,8 @@ import lombok.Builder;
 import lombok.Data;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import org.hibernate.type.ComponentType;
+import com.jfc.gnn.model.BOMComponent;
+import com.jfc.gnn.model.BOMComponent.ComponentType;
 
 import java.util.List;
 
@@ -25,7 +25,7 @@ public class GnnBomGenerationResult {
     public static class BomStructure {
         private String masterItemCode;
         private String masterItemName;
-        private List<BomComponent> components;
+        private List<BOMComponent> components;  // Using the model class
         private Map<String, List<String>> componentRelationships;
         private AssemblySequence assemblySequence;
         private double structureConfidence;
@@ -40,7 +40,7 @@ public class GnnBomGenerationResult {
         /**
          * Get components by type
          */
-        public List<BomComponent> getComponentsByType(ComponentType type) {
+        public List<BOMComponent> getComponentsByType(ComponentType type) {
             return components.stream()
                 .filter(c -> c.getType() == type)
                 .collect(Collectors.toList());
@@ -56,20 +56,7 @@ public class GnnBomGenerationResult {
         }
     }
     
-    @Data
-    @Builder
-    public static class BomComponent {
-        private String code;
-        private String name;
-        private String specification;
-        private double quantity;
-        private String unit;
-        private ComponentType type;
-        private double confidence;
-        private List<String> alternativeComponents;
-        private Map<String, Object> predictedProperties;
-    }
-    
+        
     @Data
     @Builder
     public static class PredictionMetrics {
@@ -80,5 +67,12 @@ public class GnnBomGenerationResult {
         private Map<String, Double> componentTypeMetrics;
         private long inferenceTime;
         private int totalPredictions;
+    }
+    
+    @Data
+    @Builder
+    public static class AssemblySequence {
+        private List<String> steps;
+        private Map<String, List<String>> dependencies;
     }
 }
