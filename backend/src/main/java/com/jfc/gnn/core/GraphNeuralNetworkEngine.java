@@ -19,8 +19,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import com.jfc.gnn.config.GnnModelConfig;
-import com.jfc.gnn.core.layer.GraphConvolutionLayer;
 import com.jfc.gnn.model.*;
+import com.jfc.gnn.model.KnowledgeGraph.GraphEdge;
+import com.jfc.gnn.model.KnowledgeGraph.GraphNode;
+
+import lombok.Data;
+
 import com.jfc.gnn.dto.*;
 import java.util.*;
 
@@ -32,6 +36,7 @@ public class GraphNeuralNetworkEngine {
 	/**
 	 * Graph Convolutional Network implementation (your original code)
 	 */
+	@Data
 	public class GraphConvolutionalNetwork {
 
 		private MultiLayerNetwork model;
@@ -96,20 +101,21 @@ public class GraphNeuralNetworkEngine {
 		 */
 		public INDArray forward(GraphData graphData) {
 			INDArray features = Nd4j.create(graphData.getNodeFeatures());
-			//INDArray adjacency = Nd4j.create(graphData.getAdjacencyMatrix());
-
-			// Normalize adjacency matrix
-			//INDArray normalizedAdj = normalizeAdjacency(adjacency);
-
+			
+			// Apply graph convolution if adjacency matrix is provided
+			if (graphData.getAdjacencyMatrix() != null) {
+				INDArray adjacency = Nd4j.create(graphData.getAdjacencyMatrix());
+				INDArray normalizedAdj = normalizeAdjacency(adjacency);
+				// Apply graph convolution: A * X
+				features = normalizedAdj.mmul(features);
+			}
+			
 			// For BOM prediction with DenseLayer, we flatten the node features
-            // and pass them directly to the model
-            INDArray flattenedFeatures = flattenNodeFeatures(features);
-            
-			// Perform graph convolution
-			//INDArray output = model.output(features, normalizedAdj);
-            
-            // Perform forward pass
-            INDArray output = model.output(flattenedFeatures);
+			// and pass them directly to the model
+			INDArray flattenedFeatures = flattenNodeFeatures(features);
+			
+			// Perform forward pass
+			INDArray output = model.output(flattenedFeatures);
 			return output;
 		}
 		
@@ -142,7 +148,7 @@ public class GraphNeuralNetworkEngine {
 				for (GraphBatch batch : dataset.getBatches()) {
 					INDArray features = Nd4j.create(batch.getNodeFeatures());
 					INDArray labels = Nd4j.create(batch.getLabels());
-					INDArray adjacency = Nd4j.create(batch.getAdjacency());
+					//INDArray adjacency = Nd4j.create(batch.getAdjacency());
 
 					model.fit(features, labels);
 				}
@@ -174,7 +180,7 @@ public class GraphNeuralNetworkEngine {
 				for (BOMTrainingBatch batch : batches) {
 					// Convert BOM data to graph format
 					GraphData graphData = convertBOMToGraphData(batch);
-
+					
 					INDArray features = Nd4j.create(graphData.getNodeFeatures());
 					INDArray labels = batch.getLabels();
 
@@ -199,9 +205,13 @@ public class GraphNeuralNetworkEngine {
 
 			long trainingTime = System.currentTimeMillis() - startTime;
 
-			return GnnTrainingResult.builder().success(true).modelId("GCN_" + UUID.randomUUID().toString())
-					.trainingTime(trainingTime).finalLoss(epochLosses.get(epochLosses.size() - 1))
-					.bestValidationAccuracy(bestValidationAccuracy).epochLosses(epochLosses).build();
+			return GnnTrainingResult.builder()
+					.success(true)
+					.modelId("GCN_" + UUID.randomUUID().toString())
+					.trainingTime(trainingTime)
+					.finalLoss(epochLosses.get(epochLosses.size() - 1))
+					.bestValidationAccuracy(bestValidationAccuracy)
+					.epochLosses(epochLosses).build();
 		}
 
 		/**
@@ -217,22 +227,44 @@ public class GraphNeuralNetworkEngine {
 			INDArray output = forward(graphInput);
 
 			// Decode to component predictions
-			List<ComponentPrediction> componentPredictions = decodePredictions(output, 0.5);
+			List<PredictedComponent> componentPredictions = decodePredictions(output, 0.5);
 
-			return GnnPredictionResult.builder().componentPredictions(componentPredictions)
-					.overallConfidence(calculateOverallConfidence(output)).modelId("GCN").build();
+			return GnnPredictionResult.builder()
+					.componentPredictions(componentPredictions)
+					.overallConfidence(calculateOverallConfidence(output))
+					.modelId("GCN")
+					.build();
 		}
 
 		// Helper method to normalize adjacency matrix
 		private INDArray normalizeAdjacency(INDArray adjacency) {
-			// Your existing normalization logic
-			return adjacency; // Simplified for now
+			int n = adjacency.rows();
+			
+			// Add self-loops
+			INDArray identity = Nd4j.eye(n);
+			INDArray adjWithSelfLoops = adjacency.add(identity);
+			
+			// Compute degree matrix
+			INDArray degree = adjWithSelfLoops.sum(1);
+			INDArray degreeSqrtInv = Nd4j.zeros(n);
+			
+			for (int i = 0; i < n; i++) {
+				double d = degree.getDouble(i);
+				if (d > 0) {
+					degreeSqrtInv.putScalar(i, 1.0 / Math.sqrt(d));
+				}
+			}
+			
+			// Symmetric normalization: D^(-1/2) * A * D^(-1/2)
+			INDArray degreeMatrix = Nd4j.diag(degreeSqrtInv);
+			return degreeMatrix.mmul(adjWithSelfLoops).mmul(degreeMatrix);
 		}
 	}
 
 	/**
 	 * Graph Attention Network implementation (your original code)
 	 */
+	@Data
 	public class GraphAttentionNetwork {
 
 		private MultiLayerNetwork model; // Changed from GATModel to MultiLayerNetwork
@@ -404,7 +436,7 @@ public class GraphNeuralNetworkEngine {
 			// Get final prediction
 			INDArray output = model.output(attentionOutput);
 
-			List<ComponentPrediction> componentPredictions = decodePredictions(output, 0.5);
+			List<PredictedComponent> componentPredictions = decodePredictions(output, 0.5);
 
 			return GnnPredictionResult.builder().componentPredictions(componentPredictions)
 					.overallConfidence(calculateOverallConfidence(output)).modelId("GAT").build();
@@ -431,6 +463,8 @@ public class GraphNeuralNetworkEngine {
 		private INDArray softmaxByRow(INDArray scores) {
 			return org.nd4j.linalg.ops.transforms.Transforms.softmax(scores);
 		}
+		
+		
 	}
 
 	/**
@@ -499,20 +533,104 @@ public class GraphNeuralNetworkEngine {
 
 		// Placeholder methods - implement as needed
 		private void initializeEmbeddings(KnowledgeGraph kg) {
-			// Implementation
+			// Initialize entity embeddings with random values
+		    // Extract all unique entities from nodes
+		    Set<String> entities = new HashSet<>();
+		    for (GraphNode node : kg.getNodes()) {
+		        entities.add(node.getId());
+		    }
+		    
+			for (String entity : entities) {
+				entityEmbeddings.put(entity, Nd4j.randn(embeddingDim));
+			}
+
+			// Initialize relation embeddings with random values
+		    // Extract all unique relation types from edges
+		    Set<String> relations = new HashSet<>();
+		    for (GraphEdge edge : kg.getEdges()) {
+		        relations.add(edge.getEdgeType());
+		    }
+			for (String relation : relations) {
+				relationEmbeddings.put(relation, Nd4j.randn(embeddingDim));
+			}
 		}
 
 		private void updateEmbeddings(Triple triple, boolean positive) {
-			// Implementation
+			// TransE update rule implementation
+			double learningRate = 0.01;
+			double margin = 1.0;
+
+			INDArray head = entityEmbeddings.get(triple.getSubject());
+			INDArray relation = relationEmbeddings.get(triple.getPredicate());
+			INDArray tail = entityEmbeddings.get(triple.getObject());
+
+			if (head != null && relation != null && tail != null) {
+				// Compute score: ||h + r - t||
+				INDArray predicted = head.add(relation);
+				INDArray error = predicted.sub(tail);
+				double score = error.norm2Number().doubleValue();
+
+				// Update embeddings based on margin ranking loss
+				if (positive && score > 0) {
+					// Decrease distance for positive samples
+					INDArray gradient = error.div(score);
+					head.subi(gradient.mul(learningRate));
+					relation.subi(gradient.mul(learningRate));
+					tail.addi(gradient.mul(learningRate));
+				} else if (!positive && score < margin) {
+					// Increase distance for negative samples
+					INDArray gradient = error.div(score + 1e-8);
+					head.addi(gradient.mul(learningRate));
+					relation.addi(gradient.mul(learningRate));
+					tail.subi(gradient.mul(learningRate));
+				}
+
+				// Normalize embeddings to prevent them from growing too large
+				head.divi(head.norm2Number().doubleValue() + 1e-8);
+				relation.divi(relation.norm2Number().doubleValue() + 1e-8);
+				tail.divi(tail.norm2Number().doubleValue() + 1e-8);
+			}
 		}
 
 		private Triple generateNegativeSample(Triple triple, KnowledgeGraph kg) {
-			// Implementation
-			return triple;
+			// Simple negative sampling: randomly replace head or tail
+			Random rand = new Random();
+			// Get all entity IDs from nodes
+		    List<String> entities = new ArrayList<>();
+		    for (GraphNode node : kg.getNodes()) {
+		        entities.add(node.getId());
+		    }
+
+			if (rand.nextBoolean()) {
+				// Replace head
+				String newSubject = entities.get(rand.nextInt(entities.size()));
+		        return new Triple(newSubject, triple.getPredicate(), triple.getObject());
+			} else {
+				// Replace tail
+				String newObject = entities.get(rand.nextInt(entities.size()));
+		        return new Triple(triple.getSubject(), triple.getPredicate(), newObject);
+			}
 		}
 
 		private double computeLoss(KnowledgeGraph kg) {
-			return 0.0;
+			double totalLoss = 0.0;
+			int count = 0;
+			
+			// Compute average distance for all triples
+			for (Triple triple : kg.getTriples()) {
+				INDArray head = entityEmbeddings.get(triple.getSubject());
+				INDArray relation = relationEmbeddings.get(triple.getPredicate());
+				INDArray tail = entityEmbeddings.get(triple.getObject());
+				
+				if (head != null && relation != null && tail != null) {
+					// TransE score: ||h + r - t||
+					double score = head.add(relation).sub(tail).norm2Number().doubleValue();
+					totalLoss += score;
+					count++;
+				}
+			}
+			
+			return count > 0 ? totalLoss / count : 0.0;
 		}
 
 		private double cosineSimilarity(INDArray emb1, INDArray emb2) {
@@ -583,8 +701,14 @@ public class GraphNeuralNetworkEngine {
 
 		long trainingTime = System.currentTimeMillis() - startTime;
 
-		return TrainedGnnModel.builder().model(trainedModel).config(config).trainingTime(trainingTime)
-				.version(generateModelVersion()).evaluation(result).build();
+		return TrainedGnnModel.builder()
+				.model(trainedModel)
+				.network((MultiLayerNetwork) ((TrainedGnnModel) trainedModel).getModel())
+				.config(config)
+				.trainingTime(trainingTime)
+				.version(generateModelVersion())
+				.evaluation(result)
+				.build();
 	}
 
 	// =====================================================================
@@ -645,23 +769,27 @@ public class GraphNeuralNetworkEngine {
 		int numNodes = nodeFeatures.length;
 		int[][] adjacencyMatrix = createBasicAdjacencyMatrix(numNodes);
 
-		return GraphData.builder().nodeFeatures(nodeFeatures).adjacencyMatrix(adjacencyMatrix).numNodes(numNodes)
+		return GraphData.builder()
+				.nodeFeatures(nodeFeatures)
+				.adjacencyMatrix(adjacencyMatrix)
+				.numNodes(numNodes)
 				.build();
 	}
 
 	/**
 	 * Decode model output to component predictions
 	 */
-	private List<ComponentPrediction> decodePredictions(INDArray output, double threshold) {
-		List<ComponentPrediction> predictions = new ArrayList<>();
+	private List<PredictedComponent> decodePredictions(INDArray output, double threshold) {
+		List<PredictedComponent> predictions = new ArrayList<>();
 
 		float[] probabilities = output.toFloatVector();
 
 		for (int i = 0; i < probabilities.length; i++) {
 			if (probabilities[i] > threshold) {
-				ComponentPrediction prediction = ComponentPrediction.builder().componentIndex(i)
-						.confidence(probabilities[i]).componentCode("COMP_" + i) // This should map to actual component
-																					// codes
+				PredictedComponent prediction = PredictedComponent.builder()
+						.componentCode("COMP_" + i) // This should map to actual component codes
+						.confidence((double) probabilities[i])
+						.predictedBy("GNN")  // Or use the actual model type
 						.build();
 				predictions.add(prediction);
 			}
@@ -785,5 +913,63 @@ public class GraphNeuralNetworkEngine {
 		} catch (NumberFormatException e) {
 			return defaultValue;
 		}
+	}
+	
+	/**
+	 * Load a trained model by ID
+	 */
+	public TrainedGnnModel loadModel(String modelId) {
+	    logger.info("Loading model: {}", modelId);
+	    
+	    try {
+	        // TODO: Implement actual model loading from storage/database
+	        // For now, determine model type from modelId pattern
+	        String modelType = "GCN"; // Default
+	        
+	        if (modelId != null) {
+	            if (modelId.startsWith("GAT_") || modelId.contains("GAT")) {
+	                modelType = "GAT";
+	            } else if (modelId.startsWith("GCN_") || modelId.contains("GCN")) {
+	                modelType = "GCN";
+	            }
+	        }
+	        
+	        // Create appropriate model instance based on type
+	        Object modelInstance = null;
+	        GnnModelConfig config = GnnModelConfig.builder()
+	            .modelType(modelType.equals("GAT") ? 
+	                GnnModelConfig.ModelType.GAT : 
+	                GnnModelConfig.ModelType.GCN)
+	            .inputDim(20)
+	            .hiddenDim(256)
+	            .outputDim(1000)
+	            .numHeads(modelType.equals("GAT") ? 8 : 1)
+	            .build();
+	        
+	        if (modelType.equals("GAT")) {
+	            modelInstance = new GraphAttentionNetwork(config);
+	        } else {
+	            modelInstance = new GraphConvolutionalNetwork(config);
+	        }
+	        
+	        // In production, you would:
+	        // 1. Load model metadata from database
+	        // 2. Load model weights from file storage
+	        // 3. Restore the model state
+	        
+	        return TrainedGnnModel.builder()
+	            .modelId(modelId)
+	            .model(modelInstance)
+	            .modelType(modelType)
+	            .config(config)
+	            .version("v1.0")
+	            .createdAt(new Date())
+	            .description("Loaded model " + modelId)
+	            .build();
+	            
+	    } catch (Exception e) {
+	        logger.error("Error loading model {}: {}", modelId, e.getMessage());
+	        throw new RuntimeException("Failed to load model: " + modelId, e);
+	    }
 	}
 }

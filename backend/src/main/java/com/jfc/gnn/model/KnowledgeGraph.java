@@ -50,6 +50,78 @@ public class KnowledgeGraph {
         HYDRAULIC_CYLINDER
     }
     
+    
+    /**
+     * Custom builder for KnowledgeGraph
+     */
+    public static KnowledgeGraphBuilder builder() {
+        return new KnowledgeGraphBuilder();
+    }
+    
+    /**
+     * Custom builder class with addNode and addEdge methods
+     */
+    public static class KnowledgeGraphBuilder {
+        private List<GraphNode> nodes = new ArrayList<>();
+        private List<GraphEdge> edges = new ArrayList<>();
+        private Map<String, GraphNode> nodeIndex = new HashMap<>();
+        private Map<String, List<GraphEdge>> adjacencyList = new HashMap<>();
+        
+        public KnowledgeGraphBuilder nodes(List<GraphNode> nodes) {
+            this.nodes = nodes != null ? nodes : new ArrayList<>();
+            // Rebuild node index
+            this.nodeIndex.clear();
+            for (GraphNode node : this.nodes) {
+                this.nodeIndex.put(node.getId(), node);
+            }
+            return this;
+        }
+        
+        public KnowledgeGraphBuilder edges(List<GraphEdge> edges) {
+            this.edges = edges != null ? edges : new ArrayList<>();
+            // Rebuild adjacency list
+            this.adjacencyList.clear();
+            for (GraphEdge edge : this.edges) {
+                this.adjacencyList.computeIfAbsent(edge.getSourceId(), k -> new ArrayList<>()).add(edge);
+                this.adjacencyList.computeIfAbsent(edge.getTargetId(), k -> new ArrayList<>()).add(edge);
+            }
+            return this;
+        }
+        
+        public KnowledgeGraphBuilder nodeIndex(Map<String, GraphNode> nodeIndex) {
+            this.nodeIndex = nodeIndex != null ? nodeIndex : new HashMap<>();
+            return this;
+        }
+        
+        public KnowledgeGraphBuilder adjacencyList(Map<String, List<GraphEdge>> adjacencyList) {
+            this.adjacencyList = adjacencyList != null ? adjacencyList : new HashMap<>();
+            return this;
+        }
+        
+        public KnowledgeGraphBuilder addNode(GraphNode node) {
+            if (node != null) {
+                nodes.add(node);
+                nodeIndex.put(node.getId(), node);
+                adjacencyList.putIfAbsent(node.getId(), new ArrayList<>());
+            }
+            return this;
+        }
+        
+        public KnowledgeGraphBuilder addEdge(GraphEdge edge) {
+            if (edge != null) {
+                edges.add(edge);
+                
+                // Update adjacency list
+                adjacencyList.computeIfAbsent(edge.getSourceId(), k -> new ArrayList<>()).add(edge);
+                adjacencyList.computeIfAbsent(edge.getTargetId(), k -> new ArrayList<>()).add(edge);
+            }
+            return this;
+        }
+        
+        public KnowledgeGraph build() {
+            return new KnowledgeGraph(nodes, edges, nodeIndex, adjacencyList);
+        }
+    }
     /**
      * Get all triples for knowledge graph embedding
      */

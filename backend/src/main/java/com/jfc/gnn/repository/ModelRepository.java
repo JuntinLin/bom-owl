@@ -2,6 +2,7 @@ package com.jfc.gnn.repository;
 
 import com.jfc.gnn.model.TrainedGnnModel;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Interface for model repository operations

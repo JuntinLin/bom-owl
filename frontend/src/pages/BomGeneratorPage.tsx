@@ -219,7 +219,7 @@ const KnowledgeBaseSuggestionCard = ({ suggestion, onViewDetails }: KnowledgeBas
           <CardTitle className="text-lg">{suggestion.masterItemCode}</CardTitle>
           <Badge variant="outline" className="bg-green-50">
             <Brain className="h-3 w-3 mr-1" />
-            {(suggestion.similarityScore * 100).toFixed(1)}% Match
+            {(suggestion.similarityScore).toFixed(1)}% Match
           </Badge>
         </div>
         <CardDescription>

@@ -1,5 +1,7 @@
 package com.jfc.owl.model.bom;
 
+import com.jfc.owl.model.enums.ProductType;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -22,11 +24,15 @@ public class BomComponent {
 	 * Type of the component (M = Material, P = Part)
 	 */
 	private String componentType;
+	
+	private ProductType productType;
 
 	/**
 	 * Quantity of the component required in the BOM
 	 */
 	private double quantity;
+	
+	private double unitPrice;
 
 	/**
 	 * Unit of measurement for the quantity
@@ -119,6 +125,8 @@ public class BomComponent {
 		copy.setAlternateComponent(this.alternateComponent);
 		copy.setOperation(this.operation);
 		copy.setScrapFactor(this.scrapFactor);
+		copy.setProductType(this.productType);
 		return copy;
 	}
+
 }

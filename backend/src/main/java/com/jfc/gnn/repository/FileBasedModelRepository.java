@@ -1,7 +1,9 @@
 package com.jfc.gnn.repository;
 
+import com.jfc.gnn.core.GraphNeuralNetworkEngine;
 import com.jfc.gnn.model.TrainedGnnModel;
 import org.springframework.stereotype.Component;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.util.ModelSerializer;
 import java.io.File;
 import java.io.IOException;
@@ -37,8 +39,27 @@ public class FileBasedModelRepository implements ModelRepository {
         Path modelPath = Paths.get(basePath, modelId + ".zip");
         
         // Save model using DL4J serializer
-        ModelSerializer.writeModel(model.getModel(), modelPath.toFile(), true);
-        
+        //ModelSerializer.writeModel(model.getModel(), modelPath.toFile(), true);
+        // Cast the model to the appropriate type
+        if (model.getModel() instanceof MultiLayerNetwork) {
+            MultiLayerNetwork network = (MultiLayerNetwork) model.getModel();
+            ModelSerializer.writeModel(network, modelPath.toFile(), true);
+        } else if (model.getModel() instanceof GraphNeuralNetworkEngine.GraphConvolutionalNetwork) {
+            // Extract the MultiLayerNetwork from GCN
+            GraphNeuralNetworkEngine.GraphConvolutionalNetwork gcn = 
+                (GraphNeuralNetworkEngine.GraphConvolutionalNetwork) model.getModel();
+            MultiLayerNetwork network = gcn.getModel(); // Assuming GCN has getModel() method
+            ModelSerializer.writeModel(network, modelPath.toFile(), true);
+        } else if (model.getModel() instanceof GraphNeuralNetworkEngine.GraphAttentionNetwork) {
+            // Extract the MultiLayerNetwork from GAT
+            GraphNeuralNetworkEngine.GraphAttentionNetwork gat = 
+                (GraphNeuralNetworkEngine.GraphAttentionNetwork) model.getModel();
+            MultiLayerNetwork network = gat.getModel(); // Assuming GAT has getModel() method
+            ModelSerializer.writeModel(network, modelPath.toFile(), true);
+        } else {
+            throw new IllegalArgumentException("Unsupported model type: " + 
+                model.getModel().getClass().getName());
+        }
         // Save metadata
         saveMetadata(modelId, model);
         
@@ -115,7 +136,7 @@ public class FileBasedModelRepository implements ModelRepository {
         Path metadataPath = Paths.get(basePath, modelId + ".json");
         ModelMetadata metadata = ModelMetadata.builder()
             .modelId(modelId)
-            .modelName(model.getModelName())
+            .modelName(model.getModelType())
             .version(model.getVersion())
             .config(model.getConfig())
             .createdAt(new Date())

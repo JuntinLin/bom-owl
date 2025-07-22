@@ -19,6 +19,8 @@ public class TrainingDataset {
     private int batchSize;
     private String datasetName;
     private DatasetType type;
+    private List<GraphBatch> testSet;
+
     
     public enum DatasetType {
         TRAIN,

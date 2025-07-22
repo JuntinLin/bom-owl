@@ -1,9 +1,14 @@
 package com.jfc.gnn.converter;
 
+
 import org.apache.jena.ontology.*;
 import org.apache.jena.rdf.model.*;
+import org.apache.jena.util.iterator.ExtendedIterator;
+import org.apache.jena.vocabulary.RDF;
 import org.springframework.stereotype.Component;
 import com.jfc.gnn.model.*;
+import com.jfc.gnn.model.KnowledgeGraph.GraphEdge;
+import com.jfc.gnn.model.KnowledgeGraph.GraphNode;
 import com.jfc.gnn.model.KnowledgeGraph.KnowledgeGraphBuilder;
 
 import org.slf4j.Logger;
@@ -25,7 +30,8 @@ public class OntologyToGraphConverter {
         KnowledgeGraphBuilder builder = KnowledgeGraph.builder();
         
         // Extract all individuals (nodes)
-        ExtIterator<Individual> individuals = ontModel.listIndividuals();
+        //ExtIterator<Individual> individuals = ontModel.listIndividuals();
+        ExtendedIterator<Individual> individuals = ontModel.listIndividuals();
         while (individuals.hasNext()) {
             Individual ind = individuals.next();
             GraphNode node = createNodeFromIndividual(ind);
@@ -43,6 +49,14 @@ public class OntologyToGraphConverter {
         }
         
         return builder.build();
+    }
+    /**
+     * Check if a statement represents an object property
+     */
+    private boolean isObjectProperty(Statement stmt) {
+        // Object properties link resources (not literals)
+        return stmt.getObject().isResource() && 
+               !stmt.getPredicate().equals(RDF.type);
     }
     
     /**
@@ -188,5 +202,119 @@ public class OntologyToGraphConverter {
         }
         
         return matrix;
+    }
+    
+    /**
+     * Create edge from RDF statement
+     */
+    private GraphEdge createEdgeFromStatement(Statement stmt) {
+        String sourceId = stmt.getSubject().getURI();
+        String targetId = stmt.getObject().isResource() ? 
+            stmt.getObject().asResource().getURI() : 
+            stmt.getObject().toString();
+        String edgeType = stmt.getPredicate().getLocalName();
+        
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("predicate", stmt.getPredicate().getURI());
+        
+        return GraphEdge.builder()
+            .id(sourceId + "_" + edgeType + "_" + targetId)
+            .sourceId(sourceId)
+            .targetId(targetId)
+            .edgeType(edgeType)
+            .properties(properties)
+            .weight(1.0f)
+            .build();
+    }
+    
+    /**
+     * Create edge feature matrix
+     */
+    private float[][] createEdgeFeatureMatrix(List<GraphEdge> edges) {
+        if (edges.isEmpty()) {
+            return new float[0][0];
+        }
+        
+        // Define edge feature dimension (e.g., edge type encoding + weight)
+        int featureDim = 5; // Adjust based on your needs
+        float[][] matrix = new float[edges.size()][featureDim];
+        
+        for (int i = 0; i < edges.size(); i++) {
+            GraphEdge edge = edges.get(i);
+            float[] features = new float[featureDim];
+            
+            // Feature 0: weight
+            features[0] = edge.getWeight();
+            
+            // Feature 1: quantity (if available)
+            features[1] = edge.getQuantity() != null ? 
+                edge.getQuantity().floatValue() : 0.0f;
+            
+            // Features 2-4: edge type encoding (can be one-hot)
+            // You can implement more sophisticated encoding here
+            
+            matrix[i] = features;
+        }
+        
+        return matrix;
+    }
+    
+    /**
+     * Create node type mapping
+     */
+    private Map<String, Integer> createNodeTypeMapping(List<GraphNode> nodes) {
+        Map<String, Integer> typeMap = new HashMap<>();
+        Set<String> uniqueTypes = new HashSet<>();
+        
+        // Collect unique node types
+        for (GraphNode node : nodes) {
+            uniqueTypes.add(node.getType());
+        }
+        
+        // Assign integer IDs to each type
+        int typeId = 0;
+        for (String type : uniqueTypes) {
+            typeMap.put(type, typeId++);
+        }
+        
+        return typeMap;
+    }
+
+    /**
+     * Create edge type mapping
+     */
+    private Map<String, Integer> createEdgeTypeMapping(List<GraphEdge> edges) {
+        Map<String, Integer> typeMap = new HashMap<>();
+        Set<String> uniqueTypes = new HashSet<>();
+        
+        // Collect unique edge types
+        for (GraphEdge edge : edges) {
+            uniqueTypes.add(edge.getEdgeType());
+        }
+        
+        // Assign integer IDs to each type
+        int typeId = 0;
+        for (String type : uniqueTypes) {
+            typeMap.put(type, typeId++);
+        }
+        
+        return typeMap;
+    }
+    /**
+     * Determine node type from OWL individual
+     */
+    private String determineNodeType(Individual ind) {
+        // Check RDF types
+        ExtendedIterator<Resource> types = ind.listRDFTypes(true);
+        while (types.hasNext()) {
+            Resource type = types.next();
+            String typeName = type.getLocalName();
+            if (typeName != null && !typeName.isEmpty()) {
+                return typeName;
+            }
+        }
+        
+        // Default type
+        return "Thing";
     }
 }

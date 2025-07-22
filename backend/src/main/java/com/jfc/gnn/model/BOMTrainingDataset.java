@@ -2,6 +2,9 @@ package com.jfc.gnn.model;
 import lombok.*;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
+
+import com.jfc.owl.model.bom.BomComponent;
+
 import java.util.*;
 //=====================================================================
 //2. BOMTrainingDataset.java - New class for BOM training data
@@ -87,8 +90,8 @@ public class BOMTrainingDataset {
             BOMTrainingExample example = examples.get(i);
             
             // Create binary vector for components
-            for (BOMComponent component : example.getComponents()) {
-                Integer index = componentToIndex.get(component.getCode());
+            for (BomComponent component : example.getComponents()) {
+                Integer index = componentToIndex.get(component.getComponentId());
                 if (index != null && index < numComponents) {
                     matrix[i][index] = 1.0f;
                 }

@@ -4,8 +4,8 @@ import lombok.Builder;
 import lombok.Data;
 import java.util.Map;
 import java.util.stream.Collectors;
-import com.jfc.gnn.model.BOMComponent;
-import com.jfc.gnn.model.BOMComponent.ComponentType;
+import com.jfc.owl.model.bom.BomComponent;
+import com.jfc.owl.model.enums.ProductType;
 
 import java.util.List;
 
@@ -25,7 +25,7 @@ public class GnnBomGenerationResult {
     public static class BomStructure {
         private String masterItemCode;
         private String masterItemName;
-        private List<BOMComponent> components;  // Using the model class
+        private List<BomComponent> components;  // Using the model class
         private Map<String, List<String>> componentRelationships;
         private AssemblySequence assemblySequence;
         private double structureConfidence;
@@ -40,9 +40,9 @@ public class GnnBomGenerationResult {
         /**
          * Get components by type
          */
-        public List<BOMComponent> getComponentsByType(ComponentType type) {
+        public List<BomComponent> getComponentsByProductType(ProductType type) {
             return components.stream()
-                .filter(c -> c.getType() == type)
+                .filter(c -> c.getProductType() == type)
                 .collect(Collectors.toList());
         }
         

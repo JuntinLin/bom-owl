@@ -10,7 +10,12 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(exclude = {
 	    UserDetailsServiceAutoConfiguration.class
 	})
-@ComponentScan(basePackages = {"com.jfc.owl", "com.jfc.rdb.common", "com.jfc.rdb.tiptop"})
+@ComponentScan(basePackages = {
+		"com.jfc.owl", 
+		"com.jfc.rdb.common", 
+		"com.jfc.rdb.tiptop",
+	    "com.jfc.gnn"
+		})
 public class OwlApplication {
 
 	public static void main(String[] args) {

@@ -5,6 +5,8 @@ import java.util.Map;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
 
+import com.jfc.owl.model.bom.BomComponent;
+
 //=====================================================================
 //3. BOMTrainingExample.java - Single training example
 //=====================================================================
@@ -20,7 +22,7 @@ import lombok.NoArgsConstructor;
 public class BOMTrainingExample {
  private String masterItemCode;
  private ProductSpecifications specifications;
- private List<BOMComponent> components;
+ private List<BomComponent> components;
  private INDArray labels; // Binary vector for component presence
  
  /**
@@ -40,9 +42,9 @@ public class BOMTrainingExample {
      int maxComponents = 1000; // Adjust based on vocabulary size
      float[] labelArray = new float[maxComponents];
      
-     for (BOMComponent component : components) {
+     for (BomComponent component : components) {
          // Simple hash-based indexing - in production, use proper vocabulary mapping
-         int index = Math.abs(component.getCode().hashCode()) % maxComponents;
+         int index = Math.abs(component.getComponentId().hashCode()) % maxComponents;
          labelArray[index] = 1.0f;
      }
      
@@ -55,8 +57,8 @@ public class BOMTrainingExample {
  public void setLabelsFromVocabulary(Map<String, Integer> componentToIndex, int vocabularySize) {
      float[] labelArray = new float[vocabularySize];
      
-     for (BOMComponent component : components) {
-         Integer index = componentToIndex.get(component.getCode());
+     for (BomComponent component : components) {
+         Integer index = componentToIndex.get(component.getComponentId());
          if (index != null && index < vocabularySize) {
              labelArray[index] = 1.0f;
          }
